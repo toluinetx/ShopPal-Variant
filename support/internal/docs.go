@@ -1,23 +1,34 @@
 package internal
 
 import (
+	"embed"
 	_ "embed"
+	"io/fs"
 	"net/http"
 )
 
 //go:embed openapi.yaml
 var openAPISpec string
 
+//go:embed swagger-ui/swagger-ui-bundle.js swagger-ui/swagger-ui.css
+var swaggerUIAssetsRaw embed.FS
+
+// swaggerUIAssets is rooted at swagger-ui/ so file paths in the FS match
+// the URLs we serve them at (no "swagger-ui/" prefix leaking through).
+var swaggerUIAssets, _ = fs.Sub(swaggerUIAssetsRaw, "swagger-ui")
+
+// Assets are vendored (not CDN-loaded) so /docs works with no outbound
+// network access — important for air-gapped or egress-locked clusters.
 const swaggerUIHTML = `<!doctype html>
 <html>
   <head>
     <title>ShopPal Support API Docs</title>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+    <link rel="stylesheet" href="/docs/assets/swagger-ui.css" />
   </head>
   <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="/docs/assets/swagger-ui-bundle.js"></script>
     <script>
       window.ui = SwaggerUIBundle({
         url: '/openapi.yaml',
@@ -39,3 +50,8 @@ func (h *Handler) docsHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(swaggerUIHTML))
 }
+
+func docsAssetsHandler() http.Handler {
+	return http.StripPrefix("/docs/assets/", http.FileServer(http.FS(swaggerUIAssets)))
+}
+

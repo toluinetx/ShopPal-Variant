@@ -25,6 +25,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /events", h.list)
 	mux.HandleFunc("GET /openapi.yaml", h.openAPISpecHandler)
 	mux.HandleFunc("GET /docs", h.docsHandler)
+	mux.Handle("GET /docs/assets/", docsAssetsHandler())
 	return mux
 }
 

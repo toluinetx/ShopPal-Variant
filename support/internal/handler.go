@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -28,6 +29,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /categories", h.listCategories)
 	mux.HandleFunc("GET /openapi.yaml", h.openAPISpecHandler)
 	mux.HandleFunc("GET /docs", h.docsHandler)
+	mux.Handle("GET /docs/assets/", docsAssetsHandler())
 	mux.HandleFunc("POST /tickets", h.createTicket)
 	mux.HandleFunc("GET /tickets", h.listTickets)
 	mux.HandleFunc("GET /tickets/{id}", h.getTicket)
@@ -83,7 +85,7 @@ func (h *Handler) createTicket(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not create ticket")
 		return
 	}
-	go h.notifier.Emit(r.Context(), "ticket.created", ticket)
+	go h.notifier.Emit(context.Background(), "ticket.created", ticket)
 	writeJSON(w, http.StatusCreated, ticket)
 }
 
@@ -140,7 +142,7 @@ func (h *Handler) addMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not add message")
 		return
 	}
-	go h.notifier.Emit(r.Context(), "ticket.message_added", msg)
+	go h.notifier.Emit(context.Background(), "ticket.message_added", msg)
 	writeJSON(w, http.StatusCreated, msg)
 }
 
@@ -165,7 +167,7 @@ func (h *Handler) updateStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not update status")
 		return
 	}
-	go h.notifier.Emit(r.Context(), "ticket.status_changed", ticket)
+	go h.notifier.Emit(context.Background(), "ticket.status_changed", ticket)
 	writeJSON(w, http.StatusOK, ticket)
 }
 
