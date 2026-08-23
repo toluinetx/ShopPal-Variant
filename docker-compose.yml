@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shoppal
+      POSTGRES_PASSWORD: shoppal
+      POSTGRES_DB: shoppal
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Applied once, only when the data directory is empty (official
+      # postgres image convention). support/notifications self-migrate
+      # on boot; the core `server` API has no migration tooling of its
+      # own, so its schema is bootstrapped here.
+      - ./server/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shoppal -d shoppal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notifications:
+    build:
+      context: ./notifications
+    restart: unless-stopped
+    environment:
+      PORT: "8082"
+      MAX_EVENTS: "1000"
+    ports:
+      - "8082:8082"
+
+  support:
+    build:
+      context: ./support
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      notifications:
+        condition: service_started
+    environment:
+      PORT: "8081"
+      DATABASE_URL: "postgres://shoppal:shoppal@postgres:5432/shoppal?sslmode=disable"
+      NOTIFICATIONS_URL: "http://notifications:8082"
+      ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:8080"
+      ENV: "development"
+    ports:
+      - "8081:8081"
+
+  server:
+    build:
+      context: ./server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: "production"
+      DB_CONNECTION_URL: "postgres://shoppal:shoppal@postgres:5432/shoppal"
+      CLIENT_PROD_URL: "http://localhost:8080"
+      JWT_SECRET: "change-me-dev-only-not-for-prod"
+      JWT_ACCESS_TOKEN_LENGTH: "15m"
+      JWT_REFRESH_TOKEN_LENGTH: "7d"
+      COOKIE_REFRESH_TOKEN_NAME: "refreshToken"
+      COOKIE_REFRESH_TOKEN_AGE: "604800000"
+      BCRYPT_HASH_LENGTH: "10"
+    ports:
+      - "3000:3000"
+
+  client:
+    build:
+      context: ./client
+      args:
+        VITE_SERVER_URL: "http://localhost:3000"
+        VITE_SUPPORT_URL: "http://localhost:8081"
+    restart: unless-stopped
+    depends_on:
+      - server
+      - support
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

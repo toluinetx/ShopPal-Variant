@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shoppal-config
+  namespace: shoppal
+data:
+  # Postgres bootstrap (StatefulSet POSTGRES_DB)
+  DB_NAME: "shoppal"
+
+  # server (Node/Express) — non-secret config
+  NODE_ENV: "production"
+  CLIENT_PROD_URL: "https://shop.example.com"
+  JWT_ACCESS_TOKEN_LENGTH: "15m"
+  JWT_REFRESH_TOKEN_LENGTH: "7d"
+  COOKIE_REFRESH_TOKEN_NAME: "refreshToken"
+  COOKIE_REFRESH_TOKEN_AGE: "604800000"
+  BCRYPT_HASH_LENGTH: "10"
+
+  # support (Go)
+  SUPPORT_ALLOWED_ORIGINS: "https://shop.example.com,http://localhost:5173"
+  NOTIFICATIONS_URL: "http://notifications:8082"

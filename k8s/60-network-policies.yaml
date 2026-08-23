@@ -1,0 +1,72 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: shoppal
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Postgres only accepts traffic from server + support pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-allow
+  namespace: shoppal
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: server
+        - podSelector:
+            matchLabels:
+              app: support
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notifications-allow
+  namespace: shoppal
+spec:
+  podSelector:
+    matchLabels:
+      app: notifications
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: support
+        - podSelector:
+            matchLabels:
+              app: server
+      ports:
+        - protocol: TCP
+          port: 8082
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: public-services
+  namespace: shoppal
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [client, server, support]
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}

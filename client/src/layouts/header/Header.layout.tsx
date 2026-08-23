@@ -82,6 +82,9 @@ export function Header() {
                         <li>
                             <Link to="/cart">Cart</Link>
                         </li>
+                        <li>
+                            <Link to="/support">Support</Link>
+                        </li>
                         {auth?.user && (
                             <li>
                                 <Link to={`/profile/${auth?.user.user_id}`}>Profile</Link>

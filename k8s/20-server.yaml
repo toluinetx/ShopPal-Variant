@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+  namespace: shoppal
+spec:
+  selector:
+    app: server
+  ports:
+    - port: 3000
+      targetPort: 3000
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  namespace: shoppal
+  labels:
+    app: server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: server
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: server
+    spec:
+      containers:
+        - name: server
+          image: ghcr.io/shoppal/server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: NODE_ENV }
+            - name: CLIENT_PROD_URL
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: CLIENT_PROD_URL }
+            - name: JWT_ACCESS_TOKEN_LENGTH
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: JWT_ACCESS_TOKEN_LENGTH }
+            - name: JWT_REFRESH_TOKEN_LENGTH
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: JWT_REFRESH_TOKEN_LENGTH }
+            - name: COOKIE_REFRESH_TOKEN_NAME
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: COOKIE_REFRESH_TOKEN_NAME }
+            - name: COOKIE_REFRESH_TOKEN_AGE
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: COOKIE_REFRESH_TOKEN_AGE }
+            - name: BCRYPT_HASH_LENGTH
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: BCRYPT_HASH_LENGTH }
+            - name: DB_CONNECTION_URL
+              valueFrom:
+                secretKeyRef: { name: shoppal-secret, key: DB_CONNECTION_URL }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: shoppal-secret, key: JWT_SECRET }
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: server
+  namespace: shoppal
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: server
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

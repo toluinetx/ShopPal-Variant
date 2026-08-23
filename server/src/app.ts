@@ -15,6 +15,7 @@ import ReviewRouter from '@/api/reviews/review.router';
 import ProductRouter from '@/api/products/product.router';
 import { errorMiddleware } from '@/middlewares/error.middleware';
 import corsMiddleware from './middlewares/cors.middleware';
+import { mountApiDocs } from './docs';
 
 // Express app setup:
 const app = express();
@@ -28,6 +29,24 @@ app.use(
 );
 app.use(express.json());
 app.use(cookieParser());
+
+// Health & readiness (referenced by container healthcheck + k8s probes):
+app.get('/health', (_req, res) => {
+	res.status(200).json({ status: 'ok', service: 'server' });
+});
+app.get('/ready', async (_req, res) => {
+	try {
+		if (AppDataSource.isInitialized) {
+			await AppDataSource.query('SELECT 1');
+		}
+		res.status(200).json({ status: 'ready' });
+	} catch (err: any) {
+		res.status(503).json({ status: 'not-ready', error: err?.message });
+	}
+});
+
+// API docs (OpenAPI spec + Swagger UI):
+mountApiDocs(app);
 
 // Routes:
 app.use('/user', UserRouter);
