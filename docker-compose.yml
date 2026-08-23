@@ -10,6 +10,11 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Applied once, only when the data directory is empty (official
+      # postgres image convention). support/notifications self-migrate
+      # on boot; the core `server` API has no migration tooling of its
+      # own, so its schema is bootstrapped here.
+      - ./server/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U shoppal -d shoppal"]
       interval: 10s
@@ -53,12 +58,14 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: "production"
-      DB_HOST: "postgres"
-      DB_PORT: "5432"
-      DB_USER: "shoppal"
-      DB_PASSWORD: "shoppal"
-      DB_NAME: "shoppal"
-      SUPPORT_SERVICE_URL: "http://support:8081"
+      DB_CONNECTION_URL: "postgres://shoppal:shoppal@postgres:5432/shoppal"
+      CLIENT_PROD_URL: "http://localhost:8080"
+      JWT_SECRET: "change-me-dev-only-not-for-prod"
+      JWT_ACCESS_TOKEN_LENGTH: "15m"
+      JWT_REFRESH_TOKEN_LENGTH: "7d"
+      COOKIE_REFRESH_TOKEN_NAME: "refreshToken"
+      COOKIE_REFRESH_TOKEN_AGE: "604800000"
+      BCRYPT_HASH_LENGTH: "10"
     ports:
       - "3000:3000"
 

@@ -75,7 +75,16 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
+            # Applied once, only when the data directory is empty
+            # (official postgres image convention). Bootstraps the
+            # `server` API's schema; support/notifications self-migrate.
+            - name: schema-init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: postgres-data
+        - name: schema-init
+          configMap:
+            name: shoppal-db-schema

@@ -39,18 +39,43 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
-          envFrom:
-            - configMapRef:
-                name: shoppal-config
-            - secretRef:
-                name: shoppal-secret
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: NODE_ENV }
+            - name: CLIENT_PROD_URL
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: CLIENT_PROD_URL }
+            - name: JWT_ACCESS_TOKEN_LENGTH
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: JWT_ACCESS_TOKEN_LENGTH }
+            - name: JWT_REFRESH_TOKEN_LENGTH
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: JWT_REFRESH_TOKEN_LENGTH }
+            - name: COOKIE_REFRESH_TOKEN_NAME
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: COOKIE_REFRESH_TOKEN_NAME }
+            - name: COOKIE_REFRESH_TOKEN_AGE
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: COOKIE_REFRESH_TOKEN_AGE }
+            - name: BCRYPT_HASH_LENGTH
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: BCRYPT_HASH_LENGTH }
+            - name: DB_CONNECTION_URL
+              valueFrom:
+                secretKeyRef: { name: shoppal-secret, key: DB_CONNECTION_URL }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: shoppal-secret, key: JWT_SECRET }
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /ready
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 3000
             initialDelaySeconds: 20
             periodSeconds: 30
