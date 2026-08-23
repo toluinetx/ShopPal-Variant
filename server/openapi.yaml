@@ -1,0 +1,924 @@
+openapi: 3.0.3
+info:
+  title: ShopPal Core API
+  description: >
+    Core e-commerce API for ShopPal — authentication, users, products,
+    carts, orders and reviews. Session auth uses a short-lived JWT access
+    token (returned in the response body) plus an HttpOnly refresh-token
+    cookie.
+  version: "1.0.0"
+  contact:
+    name: ShopPal
+tags:
+  - name: Auth
+  - name: Users
+  - name: Products
+  - name: Carts
+  - name: Orders
+  - name: Reviews
+servers:
+  - url: /
+    description: Same-origin (behind ingress / reverse proxy)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string, example: server }
+
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe (checks DB connectivity)
+      security: []
+      responses:
+        "200":
+          description: Ready to serve traffic
+        "503":
+          description: Database not reachable
+
+  /auth/refresh-token:
+    get:
+      tags: [Auth]
+      summary: Exchange the refresh-token cookie for a new access token
+      security: []
+      responses:
+        "200":
+          description: New access token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "406":
+          description: No/invalid refresh token cookie
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /user/signup:
+    post:
+      tags: [Users]
+      summary: Create an account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SignupRequest" }
+      responses:
+        "201":
+          description: Account created; refresh-token cookie set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /user/loginByUsername:
+    post:
+      tags: [Users]
+      summary: Log in with username + password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        "201":
+          description: Logged in; refresh-token cookie set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /user/loginByEmail:
+    post:
+      tags: [Users]
+      summary: Log in with email + password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        "201":
+          description: Logged in; refresh-token cookie set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /user/logout:
+    post:
+      tags: [Users]
+      summary: Log out (clears the refresh-token cookie)
+      security: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: User logged out successfully }
+
+  /user/{user_id}:
+    patch:
+      tags: [Users]
+      summary: Update the authenticated user's profile
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserRequest" }
+      responses:
+        "201":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [Users]
+      summary: Delete the authenticated user's account
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: User deleted successfully }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /product:
+    get:
+      tags: [Products]
+      summary: List products (filterable, sortable, paginated)
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, default: 10 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [title, price, rating, stock, brand]
+            default: title
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc], default: asc }
+        - name: categories
+          in: query
+          description: Comma-separated `Category` values
+          schema: { type: string }
+        - name: title
+          in: query
+          schema: { type: string }
+        - name: brand
+          in: query
+          schema: { type: string }
+        - name: minPrice
+          in: query
+          schema: { type: number, minimum: 0, default: 0 }
+        - name: maxPrice
+          in: query
+          schema: { type: number, minimum: 0 }
+        - name: minRating
+          in: query
+          schema: { type: number, minimum: 0, maximum: 5, default: 0 }
+        - name: inStock
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Product page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  products:
+                    type: array
+                    items: { $ref: "#/components/schemas/Product" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+    post:
+      tags: [Products]
+      summary: Create a product
+      description: Not wired up in the frontend yet; intended for admin/catalog tooling.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: "#/components/schemas/Product" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /product/{product_id}:
+    get:
+      tags: [Products]
+      summary: Get a single product
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Product
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: "#/components/schemas/Product" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Products]
+      summary: Update a product
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductUpdateInput" }
+      responses:
+        "201":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: "#/components/schemas/Product" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [Products]
+      summary: Delete a product
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Product deleted successfully }
+
+  /cart:
+    post:
+      tags: [Carts]
+      summary: Resolve guest-cart product IDs to full product records
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_ids]
+              properties:
+                product_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Products in the guest cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  products:
+                    type: array
+                    items: { $ref: "#/components/schemas/Product" }
+
+  /cart/{user_id}:
+    get:
+      tags: [Carts]
+      summary: Get the authenticated user's cart with product details
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: User cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userCart:
+                    type: array
+                    items: { $ref: "#/components/schemas/CartItem" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Carts]
+      summary: Add a product to the authenticated user's cart
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, quantity]
+              properties:
+                product_id: { type: string, format: uuid }
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Product added to cart successfully }
+    delete:
+      tags: [Carts]
+      summary: Empty the authenticated user's cart
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: All products removed from cart successfully }
+
+  /cart/{user_id}/{product_id}:
+    delete:
+      tags: [Carts]
+      summary: Remove one product from the authenticated user's cart
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Product removed from cart successfully }
+
+  /order:
+    post:
+      tags: [Orders]
+      summary: Create an order as a guest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateOrderRequest" }
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+    patch:
+      tags: [Orders]
+      summary: Bulk-update product stock levels (post-checkout reconciliation)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_ids, new_stocks]
+              properties:
+                product_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                new_stocks:
+                  type: array
+                  items: { type: integer, minimum: 0 }
+      responses:
+        "204":
+          description: Stocks updated
+
+  /order/{user_id}:
+    get:
+      tags: [Orders]
+      summary: List the authenticated user's orders
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 30 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Order history page
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OrderHistoryItem" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Orders]
+      summary: Create an order for the authenticated user
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateOrderRequest" }
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /order/{order_id}:
+    patch:
+      tags: [Orders]
+      summary: Update an order's status or delivery address
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: string, format: uuid }
+                order_status: { $ref: "#/components/schemas/OrderStatus" }
+                delivery_address: { $ref: "#/components/schemas/Address" }
+      responses:
+        "204":
+          description: Updated
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [Orders]
+      summary: Cancel/delete a recently-placed order
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /review/{product_id}:
+    get:
+      tags: [Reviews]
+      summary: List reviews for a product
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: sortBy
+          in: query
+          schema: { type: string, enum: [rating, date], default: date }
+        - name: order
+          in: query
+          schema: { type: string, enum: [ASC, DESC], default: DESC }
+      responses:
+        "200":
+          description: Review page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reviews:
+                    type: array
+                    items: { $ref: "#/components/schemas/Review" }
+    post:
+      tags: [Reviews]
+      summary: Create a review for a product
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, rating, comment]
+              properties:
+                user_id: { type: string, format: uuid }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                comment: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  review: { $ref: "#/components/schemas/Review" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      tags: [Reviews]
+      summary: Update the authenticated user's review of a product
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: string, format: uuid }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                comment: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "204":
+          description: Updated
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /review/{product_id}/{user_id}:
+    get:
+      tags: [Reviews]
+      summary: Get one user's review status/content for a product
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Review status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  review:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [no_order, no_review, review_found]
+                      review:
+                        allOf:
+                          - $ref: "#/components/schemas/Review"
+                        nullable: true
+    delete:
+      tags: [Reviews]
+      summary: Delete the authenticated user's review of a product
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Access token returned from signup/login/refresh. Sent as
+        `Authorization: Bearer <token>`. A parallel HttpOnly `refreshToken`
+        cookie is used by `/auth/refresh-token` to mint new access tokens.
+
+  parameters:
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      description: Must match the authenticated user's ID.
+      schema: { type: string, format: uuid }
+    ProductId:
+      name: product_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    OrderId:
+      name: order_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    ValidationError:
+      description: Request failed validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: Missing/invalid access token, or acting on another user's resource
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        type: { type: string, example: "Bad Request" }
+        message: { type: string }
+        statusCode: { type: integer, example: 400 }
+
+    Address:
+      type: object
+      required: [country, city, street]
+      properties:
+        country: { type: string }
+        city: { type: string }
+        street: { type: string }
+
+    NameDetails:
+      type: object
+      required: [first_name, last_name]
+      properties:
+        first_name: { type: string }
+        middle_name: { type: string }
+        last_name: { type: string }
+
+    Dimension:
+      type: object
+      properties:
+        width: { type: number, nullable: true }
+        height: { type: number, nullable: true }
+        depth: { type: number, nullable: true }
+        weight: { type: number, nullable: true }
+
+    Gender:
+      type: string
+      enum: [male, female, other]
+
+    Category:
+      type: string
+      enum:
+        - beauty
+        - fragrances
+        - furniture
+        - groceries
+        - home-decoration
+        - kitchen-accessories
+        - laptops
+        - mens-shirts
+        - mens-shoes
+        - mens-watches
+        - mobile-accessories
+        - motorcycle
+        - skin-care
+        - smartphones
+        - sports-accessories
+        - sunglasses
+        - tablets
+        - tops
+        - vehicle
+        - womens-bags
+        - womens-dresses
+        - womens-jewellery
+        - womens-shoes
+        - womens-watches
+
+    OrderStatus:
+      type: string
+      enum: [arrived, purchased, delivering]
+
+    User:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        username: { type: string }
+        gender: { $ref: "#/components/schemas/Gender" }
+        phone: { type: string, nullable: true }
+        birthday: { type: string, format: date, nullable: true }
+        avatar: { type: string, format: uri, nullable: true }
+        name_details: { $ref: "#/components/schemas/NameDetails" }
+        address: { $ref: "#/components/schemas/Address" }
+
+    SignupRequest:
+      type: object
+      required: [email, username, password, gender, name_details, address]
+      properties:
+        email: { type: string, format: email }
+        username:
+          type: string
+          minLength: 3
+          pattern: "^[a-zA-Z0-9_]*$"
+        password:
+          type: string
+          format: password
+          minLength: 6
+          maxLength: 18
+          description: Must contain 1 lowercase, 1 uppercase, 1 number, 1 symbol.
+        gender: { $ref: "#/components/schemas/Gender" }
+        name_details: { $ref: "#/components/schemas/NameDetails" }
+        address: { $ref: "#/components/schemas/Address" }
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        username: { type: string, minLength: 3 }
+        password: { type: string, format: password, minLength: 6, maxLength: 18 }
+        gender: { $ref: "#/components/schemas/Gender" }
+        name_details: { $ref: "#/components/schemas/NameDetails" }
+        address: { $ref: "#/components/schemas/Address" }
+        birthday: { type: string, format: date, nullable: true }
+        avatar: { type: string, format: uri, nullable: true }
+        phone: { type: string, nullable: true, description: "10 digits" }
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        user: { $ref: "#/components/schemas/User" }
+
+    Product:
+      type: object
+      properties:
+        product_id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        category: { $ref: "#/components/schemas/Category" }
+        price: { type: number }
+        rating: { type: number, minimum: 0, maximum: 5 }
+        stock: { type: integer }
+        images:
+          type: array
+          items: { type: string, format: uri }
+          nullable: true
+        thumbnail: { type: string, format: uri, nullable: true }
+        brand: { type: string, nullable: true }
+        return_policy: { type: string, nullable: true }
+        shipping_info: { type: string, nullable: true }
+        warranty_info: { type: string, nullable: true }
+        dimension: { $ref: "#/components/schemas/Dimension" }
+
+    ProductInput:
+      allOf:
+        - $ref: "#/components/schemas/Product"
+      required: [title, price, rating, stock, category]
+
+    ProductUpdateInput:
+      allOf:
+        - $ref: "#/components/schemas/Product"
+
+    CartItem:
+      allOf:
+        - $ref: "#/components/schemas/Product"
+        - type: object
+          properties:
+            quantity: { type: integer, minimum: 1 }
+
+    CreateOrderRequest:
+      type: object
+      required: [product_ids, quantities, billing_info, delivery_address]
+      properties:
+        product_ids:
+          type: array
+          items: { type: string, format: uuid }
+          minItems: 1
+        quantities:
+          type: array
+          items: { type: integer, minimum: 1 }
+          minItems: 1
+          description: Same length and order as `product_ids`.
+        billing_info: { type: string }
+        delivery_address: { $ref: "#/components/schemas/Address" }
+
+    Order:
+      type: object
+      properties:
+        order_id: { type: string, format: uuid }
+        issued_time: { type: string, format: date-time }
+        order_status: { $ref: "#/components/schemas/OrderStatus" }
+        billing_info: { type: string, nullable: true }
+        delivery_address: { $ref: "#/components/schemas/Address" }
+
+    OrderHistoryItem:
+      type: object
+      properties:
+        order_id: { type: string, format: uuid }
+        issued_time: { type: string, format: date-time }
+        order_status: { $ref: "#/components/schemas/OrderStatus" }
+        delivery_address: { $ref: "#/components/schemas/Address" }
+        billing_info: { type: string, nullable: true }
+        products:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id: { type: string, format: uuid }
+              thumbnail: { type: string, format: uri, nullable: true }
+              title: { type: string }
+              price: { type: number }
+              quantity: { type: integer }
+
+    Review:
+      type: object
+      properties:
+        product_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        rating: { type: number, minimum: 1, maximum: 5 }
+        comment: { type: string }
+        date: { type: string, format: date-time }

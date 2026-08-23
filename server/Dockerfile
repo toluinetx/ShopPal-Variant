@@ -20,6 +20,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev || npm install --omit=dev
 
 COPY --from=build /app/dist ./dist
+COPY openapi.yaml ./openapi.yaml
 
 USER app
 EXPOSE 3000

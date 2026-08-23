@@ -1,0 +1,261 @@
+openapi: 3.0.3
+info:
+  title: ShopPal Support API
+  description: >
+    Ticketing service for customer support. Emits events to the
+    notifications service as a best-effort side effect of ticket
+    mutations.
+  version: "1.0.0"
+tags:
+  - name: Tickets
+  - name: Meta
+  - name: Health
+servers:
+  - url: /
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string, example: support }
+                  uptime_sec: { type: integer }
+
+  /readyz:
+    get:
+      tags: [Health]
+      summary: Readiness probe (checks database connectivity)
+      responses:
+        "200":
+          description: Ready to serve traffic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ready }
+        "503":
+          description: Database unreachable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: not-ready }
+                  err: { type: string }
+
+  /categories:
+    get:
+      tags: [Meta]
+      summary: List valid ticket categories
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items: { type: string }
+                    example:
+                      [order_issue, refund_request, shipping, account, payment, product_question, other]
+
+  /tickets:
+    post:
+      tags: [Tickets]
+      summary: Create a support ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTicketRequest" }
+      responses:
+        "201":
+          description: Ticket created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      tags: [Tickets]
+      summary: List tickets
+      parameters:
+        - name: user_id
+          in: query
+          description: Filter to a single user's tickets; omit for all tickets (agent view).
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Ticket list, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Ticket" }
+
+  /tickets/{id}:
+    get:
+      tags: [Tickets]
+      summary: Get a ticket with its full message thread
+      parameters:
+        - $ref: "#/components/parameters/TicketId"
+      responses:
+        "200":
+          description: Ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tickets/{id}/messages:
+    post:
+      tags: [Tickets]
+      summary: Add a message to a ticket's thread
+      parameters:
+        - $ref: "#/components/parameters/TicketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMessageRequest" }
+      responses:
+        "201":
+          description: Message added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketMessage" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tickets/{id}/status:
+    patch:
+      tags: [Tickets]
+      summary: Transition a ticket's status
+      parameters:
+        - $ref: "#/components/parameters/TicketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: "#/components/schemas/TicketStatus" }
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  parameters:
+    TicketId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Invalid request body
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Ticket not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+
+    TicketStatus:
+      type: string
+      enum: [open, in_progress, waiting_customer, resolved, closed]
+
+    TicketPriority:
+      type: string
+      enum: [low, normal, high, urgent]
+
+    TicketMessage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        ticket_id: { type: string, format: uuid }
+        author: { type: string }
+        author_role: { type: string, example: customer }
+        body: { type: string }
+        created_at: { type: string, format: date-time }
+
+    Ticket:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string }
+        email: { type: string, format: email }
+        subject: { type: string }
+        category: { type: string }
+        order_id: { type: string, nullable: true }
+        priority: { $ref: "#/components/schemas/TicketPriority" }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/TicketMessage" }
+
+    CreateTicketRequest:
+      type: object
+      required: [email, subject, body]
+      properties:
+        user_id: { type: string, example: guest }
+        email: { type: string, format: email }
+        subject: { type: string }
+        category:
+          type: string
+          default: other
+          example: order_issue
+        order_id: { type: string, nullable: true }
+        priority: { $ref: "#/components/schemas/TicketPriority" }
+        body:
+          type: string
+          description: Initial message body.
+
+    CreateMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        author: { type: string }
+        author_role: { type: string, default: customer }
+        body: { type: string }

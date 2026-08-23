@@ -23,6 +23,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /healthz", h.health)
 	mux.HandleFunc("POST /notify", h.notify)
 	mux.HandleFunc("GET /events", h.list)
+	mux.HandleFunc("GET /openapi.yaml", h.openAPISpecHandler)
+	mux.HandleFunc("GET /docs", h.docsHandler)
 	return mux
 }
 

@@ -26,6 +26,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /healthz", h.health)
 	mux.HandleFunc("GET /readyz", h.ready)
 	mux.HandleFunc("GET /categories", h.listCategories)
+	mux.HandleFunc("GET /openapi.yaml", h.openAPISpecHandler)
+	mux.HandleFunc("GET /docs", h.docsHandler)
 	mux.HandleFunc("POST /tickets", h.createTicket)
 	mux.HandleFunc("GET /tickets", h.listTickets)
 	mux.HandleFunc("GET /tickets/{id}", h.getTicket)

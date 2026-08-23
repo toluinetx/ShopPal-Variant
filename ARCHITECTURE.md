@@ -32,12 +32,34 @@ as an Alpine container and has a Kubernetes manifest under `k8s/`.
 | `notifications`| Go 1.22, stdlib                  | 8082  | In-memory event log fed by `support` (ticket.created, message_added, status_changed) |
 | `postgres`     | Postgres 16-alpine               | 5432  | Persistence for `server` and `support` (separate tables) |
 
+## API documentation (OpenAPI)
+
+Every service ships a hand-written OpenAPI 3.0 spec and a Swagger UI:
+
+| Service         | Spec                          | Docs UI (browser)       |
+|------------------|-------------------------------|--------------------------|
+| `server`         | `GET /openapi.yaml`           | `GET /docs`              |
+| `support`        | `GET /openapi.yaml`           | `GET /docs`              |
+| `notifications`  | `GET /openapi.yaml`           | `GET /docs`              |
+
+Source files live at `server/openapi.yaml`, `support/openapi.yaml`, and
+`notifications/openapi.yaml` (the Go services embed a copy under
+`internal/` via `go:embed` so the binary is self-contained; keep both
+copies in sync when editing). Locally:
+
+```bash
+open http://localhost:3000/docs   # server
+open http://localhost:8081/docs   # support
+open http://localhost:8082/docs   # notifications
+```
+
 ## Support service — API
 
 ```
 GET  /healthz
 GET  /readyz
 GET  /categories
+GET  /openapi.yaml · GET /docs
 POST /tickets                       body: {user_id,email,subject,category,order_id?,priority?,body}
 GET  /tickets?user_id=&limit=&offset=
 GET  /tickets/{id}
@@ -52,6 +74,7 @@ Priorities: `low · normal · high · urgent`
 
 ```
 GET  /healthz
+GET  /openapi.yaml · GET /docs
 POST /notify        body: {type, timestamp, payload}   (called by support)
 GET  /events?limit= (newest-first)
 ```

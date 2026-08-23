@@ -1,0 +1,94 @@
+openapi: 3.0.3
+info:
+  title: ShopPal Notifications API
+  description: >
+    Minimal internal event sink. Other services (currently `support`)
+    POST events here as a best-effort side channel; this service keeps
+    an in-memory ring buffer of the most recent events for inspection.
+  version: "1.0.0"
+tags:
+  - name: Events
+  - name: Health
+servers:
+  - url: /
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Liveness probe + current buffered event count
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string, example: notifications }
+                  event_count: { type: integer }
+                  uptime_sec: { type: integer }
+
+  /notify:
+    post:
+      tags: [Events]
+      summary: Record an event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Event" }
+      responses:
+        "202":
+          description: Event queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: queued }
+        "400":
+          description: Invalid event (missing `type`)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+
+  /events:
+    get:
+      tags: [Events]
+      summary: List recent events, newest first
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1 }
+          description: Defaults to all buffered events (max buffer size is set by MAX_EVENTS).
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Event" }
+
+components:
+  schemas:
+    Event:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          example: ticket.created
+          description: >
+            Event name emitted by the producing service, e.g.
+            ticket.created, ticket.message_added, ticket.status_changed.
+        timestamp: { type: string, format: date-time }
+        payload:
+          type: object
+          description: Producer-defined payload; opaque to this service.
+          additionalProperties: true
