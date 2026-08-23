@@ -7,6 +7,7 @@ import { CartPage } from '@/pages/cart/Cart.page';
 import { ProfilePage } from '@/pages/profile/Profile.page';
 import { OrderPage } from '@/pages/order/Order.page';
 import { NotFoundPage } from '@/pages/not-found/NotFound.page';
+import { SupportPage } from '@/pages/support/Support.page';
 import { RequireAuth } from '@/shared/components/RequireAuth';
 import { CheckoutPage } from './pages/checkout/Checkout.page';
 import { PersistentLogin } from '@/shared/components/PersistentLogin';
@@ -54,6 +55,10 @@ export default function App() {
                     <Route
                         path="checkout"
                         element={<CheckoutPage />}
+                    />
+                    <Route
+                        path="support"
+                        element={<SupportPage />}
                     />
 
                     {/* private routes */}

@@ -29,6 +29,21 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
+// Health & readiness (referenced by container healthcheck + k8s probes):
+app.get('/health', (_req, res) => {
+	res.status(200).json({ status: 'ok', service: 'server' });
+});
+app.get('/ready', async (_req, res) => {
+	try {
+		if (AppDataSource.isInitialized) {
+			await AppDataSource.query('SELECT 1');
+		}
+		res.status(200).json({ status: 'ready' });
+	} catch (err: any) {
+		res.status(503).json({ status: 'not-ready', error: err?.message });
+	}
+});
+
 // Routes:
 app.use('/user', UserRouter);
 app.use('/auth', AuthRouter);

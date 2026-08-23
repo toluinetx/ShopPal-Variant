@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shoppal
+      POSTGRES_PASSWORD: shoppal
+      POSTGRES_DB: shoppal
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shoppal -d shoppal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notifications:
+    build:
+      context: ./notifications
+    restart: unless-stopped
+    environment:
+      PORT: "8082"
+      MAX_EVENTS: "1000"
+    ports:
+      - "8082:8082"
+
+  support:
+    build:
+      context: ./support
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      notifications:
+        condition: service_started
+    environment:
+      PORT: "8081"
+      DATABASE_URL: "postgres://shoppal:shoppal@postgres:5432/shoppal?sslmode=disable"
+      NOTIFICATIONS_URL: "http://notifications:8082"
+      ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:8080"
+      ENV: "development"
+    ports:
+      - "8081:8081"
+
+  server:
+    build:
+      context: ./server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: "production"
+      DB_HOST: "postgres"
+      DB_PORT: "5432"
+      DB_USER: "shoppal"
+      DB_PASSWORD: "shoppal"
+      DB_NAME: "shoppal"
+      SUPPORT_SERVICE_URL: "http://support:8081"
+    ports:
+      - "3000:3000"
+
+  client:
+    build:
+      context: ./client
+      args:
+        VITE_SERVER_URL: "http://localhost:3000"
+        VITE_SUPPORT_URL: "http://localhost:8081"
+    restart: unless-stopped
+    depends_on:
+      - server
+      - support
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

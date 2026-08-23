@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: notifications
+  namespace: shoppal
+spec:
+  selector:
+    app: notifications
+  ports:
+    - port: 8082
+      targetPort: 8082
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notifications
+  namespace: shoppal
+  labels:
+    app: notifications
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notifications
+  template:
+    metadata:
+      labels:
+        app: notifications
+    spec:
+      containers:
+        - name: notifications
+          image: ghcr.io/shoppal/notifications:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+          env:
+            - name: PORT
+              value: "8082"
+            - name: MAX_EVENTS
+              value: "1000"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8082
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]

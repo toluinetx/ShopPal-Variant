@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shoppal
+  labels:
+    name: shoppal
+    app.kubernetes.io/part-of: shoppal
