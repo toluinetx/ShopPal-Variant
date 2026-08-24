@@ -12,6 +12,7 @@ spec:
   tls:
     - hosts:
         - shop.example.com
+        - admin.shop.example.com
         - api.shop.example.com
         - support.shop.example.com
       secretName: shoppal-tls
@@ -24,6 +25,16 @@ spec:
             backend:
               service:
                 name: client
+                port:
+                  number: 80
+    - host: admin.shop.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin
                 port:
                   number: 80
     - host: api.shop.example.com

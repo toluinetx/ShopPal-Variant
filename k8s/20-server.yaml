@@ -46,6 +46,9 @@ spec:
             - name: CLIENT_PROD_URL
               valueFrom:
                 configMapKeyRef: { name: shoppal-config, key: CLIENT_PROD_URL }
+            - name: ADMIN_PROD_URL
+              valueFrom:
+                configMapKeyRef: { name: shoppal-config, key: ADMIN_PROD_URL }
             - name: JWT_ACCESS_TOKEN_LENGTH
               valueFrom:
                 configMapKeyRef: { name: shoppal-config, key: JWT_ACCESS_TOKEN_LENGTH }

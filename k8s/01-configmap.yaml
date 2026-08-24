@@ -10,6 +10,7 @@ data:
   # server (Node/Express) — non-secret config
   NODE_ENV: "production"
   CLIENT_PROD_URL: "https://shop.example.com"
+  ADMIN_PROD_URL: "https://admin.shop.example.com"
   JWT_ACCESS_TOKEN_LENGTH: "15m"
   JWT_REFRESH_TOKEN_LENGTH: "7d"
   COOKIE_REFRESH_TOKEN_NAME: "refreshToken"

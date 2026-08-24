@@ -2,15 +2,18 @@ openapi: 3.0.3
 info:
   title: ShopPal Core API
   description: >
-    Core e-commerce API for ShopPal — authentication, users, products,
-    carts, orders and reviews. Session auth uses a short-lived JWT access
-    token (returned in the response body) plus an HttpOnly refresh-token
-    cookie.
+    Core e-commerce API for ShopPal — authentication, admin authentication,
+    users, products, carts, orders and reviews. Session auth uses a
+    short-lived JWT access token (returned in the response body) plus an
+    HttpOnly refresh-token cookie. Admin sessions use a parallel /admin
+    login flow whose access tokens carry a role: admin claim, required by
+    the product create/update/delete endpoints.
   version: "1.0.0"
   contact:
     name: ShopPal
 tags:
   - name: Auth
+  - name: Admin
   - name: Users
   - name: Products
   - name: Carts
@@ -68,6 +71,92 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /admin/loginByUsername:
+    post:
+      tags: [Admin]
+      summary: Admin login with username + password
+      description: "Issues an access token carrying a role: admin claim, used by the admin frontend."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Logged in; adminRefreshToken cookie set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAuthResponse" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /admin/loginByEmail:
+    post:
+      tags: [Admin]
+      summary: Admin login with email + password
+      description: "Issues an access token carrying a role: admin claim, used by the admin frontend."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Logged in; adminRefreshToken cookie set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAuthResponse" }
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /admin/refresh-token:
+    get:
+      tags: [Admin]
+      summary: Exchange the adminRefreshToken cookie for a new admin access token
+      security: []
+      responses:
+        "200":
+          description: New admin access token issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAuthResponse" }
+        "406":
+          description: No/invalid admin refresh token cookie
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /admin/logout:
+    post:
+      tags: [Admin]
+      summary: Admin log out (clears the adminRefreshToken cookie)
+      security: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Admin logged out successfully }
 
   /user/signup:
     post:
@@ -251,7 +340,7 @@ paths:
     post:
       tags: [Products]
       summary: Create a product
-      description: Not wired up in the frontend yet; intended for admin/catalog tooling.
+      description: Admin only — used by the `admin` frontend. Requires an admin access token (see the Admin tag).
       requestBody:
         required: true
         content:
@@ -268,6 +357,10 @@ paths:
                   product: { $ref: "#/components/schemas/Product" }
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /product/{product_id}:
     get:
@@ -289,7 +382,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       tags: [Products]
-      summary: Update a product
+      summary: Update a product (price, stock, etc.)
+      description: Admin only — used by the `admin` frontend. Requires an admin access token (see the Admin tag).
       parameters:
         - $ref: "#/components/parameters/ProductId"
       requestBody:
@@ -308,9 +402,14 @@ paths:
                   product: { $ref: "#/components/schemas/Product" }
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
     delete:
       tags: [Products]
       summary: Delete a product
+      description: Admin only — used by the `admin` frontend. Requires an admin access token (see the Admin tag).
       parameters:
         - $ref: "#/components/parameters/ProductId"
       responses:
@@ -322,6 +421,10 @@ paths:
                 type: object
                 properties:
                   message: { type: string, example: Product deleted successfully }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /cart:
     post:
@@ -708,6 +811,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Forbidden:
+      description: Valid access token, but it doesn't carry the required admin role
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
     NotFound:
       description: Resource not found
       content:
@@ -794,6 +902,22 @@ components:
         avatar: { type: string, format: uri, nullable: true }
         name_details: { $ref: "#/components/schemas/NameDetails" }
         address: { $ref: "#/components/schemas/Address" }
+
+    Admin:
+      type: object
+      description: Separate from `User` — backed by its own `Admin` table.
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        username: { type: string }
+        name_details: { $ref: "#/components/schemas/NameDetails" }
+        admin_since: { type: string, format: date }
+
+    AdminAuthResponse:
+      type: object
+      properties:
+        accessToken: { type: string, description: "JWT carrying an extra role: admin claim" }
+        admin: { $ref: "#/components/schemas/Admin" }
 
     SignupRequest:
       type: object

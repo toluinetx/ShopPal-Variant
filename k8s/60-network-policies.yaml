@@ -65,7 +65,7 @@ spec:
     matchExpressions:
       - key: app
         operator: In
-        values: [client, server, support]
+        values: [client, admin, server, support]
   policyTypes:
     - Ingress
   ingress:

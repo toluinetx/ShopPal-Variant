@@ -180,6 +180,7 @@ export type JwtPayload = {
     user_id: string;
     email: string;
     username: string;
+    role?: 'admin';
 };
 export type ErrorResponse = {
     type: string;

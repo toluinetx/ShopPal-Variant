@@ -90,6 +90,7 @@ ShopPal is a full-stack e-commerce web application developed as a final project 
 - [x] **Order History**: Registered users can view their order history and see the status of their past purchases.
 - [x] **Account Management**: Registered users can update their account information, including their full name, user name, email, password, avatar image, delivery address, and fake payment information.
 - [x] **Responsive Design**: ShopPal is designed to be responsive and accessible on all devices, including desktops, tablets, and smartphones.
+- [x] **Admin Panel**: A separate `admin` frontend lets store admins manage the catalog — creating products and updating price, stock, and other details — gated behind admin-only JWT authentication. See [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## 🙏 Acknowledgements <a name ="acknowledgements"></a>
 

@@ -391,4 +391,36 @@ data:
 
     \unrestrict KoJDkNPJ0AaHgINahOaybc9ZpRkZmcEdVSfWuRIMJbkPBT0rjoCqt65uHj1YU2I
 
+  # Seeds a single default admin account so the admin frontend is usable out
+  # of the box (see server/db/seed-admin.sql, kept in sync with this copy).
+  # Login: username=admin / email=admin@shoppal.local / password=Admin123!
+  # CHANGE THIS PASSWORD before using this seed anywhere beyond a demo.
+  seed-admin.sql: |
+    INSERT INTO public."Admin" (
+        user_id,
+        email,
+        name_details,
+        gender,
+        phone,
+        username,
+        password,
+        birthday,
+        avatar,
+        address,
+        admin_since
+    ) VALUES (
+        public.uuid_generate_v4(),
+        'admin@shoppal.local',
+        '(Admin,User,)',
+        'other',
+        NULL,
+        'admin',
+        '$2b$10$DsU8sawwSPO8gsT.R9jQUOezHBoJRVitlTGFy5xtiLB7LXxqBT49u',
+        NULL,
+        NULL,
+        '(,,)',
+        CURRENT_DATE
+    )
+    ON CONFLICT DO NOTHING;
+
 

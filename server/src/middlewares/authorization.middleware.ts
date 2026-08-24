@@ -16,7 +16,7 @@ const authorizationMiddleware = async (req: Request, res: Response, next: NextFu
 
        const decodedData = JWTHelper.verifyToken(accessToken!) as JwtPayload;
 
-       req.jwtDecodedPayload = {user_id: decodedData.user_id, email: decodedData.email, username: decodedData.username};
+       req.jwtDecodedPayload = {user_id: decodedData.user_id, email: decodedData.email, username: decodedData.username, role: decodedData.role};
     
        next(); 
     }
