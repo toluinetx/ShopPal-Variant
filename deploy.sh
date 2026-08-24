@@ -17,7 +17,7 @@ else
   fi
 fi
 
-# 2. Build and start the stack (client, server, support, notifications, postgres)
+# 2. Build and start the stack (client, admin, server, support, notifications, postgres)
 docker compose up --build -d
 
 # 3. Wait for the core API to report ready
@@ -32,6 +32,7 @@ done
 
 echo "Deployed:"
 echo "  App:              http://localhost:8080"
+echo "  Admin panel:      http://localhost:8090  (login: admin / Admin123!)"
 echo "  Server API docs:  http://localhost:3000/docs"
 echo "  Support API docs: http://localhost:8081/docs"
 echo "  Notifications API docs: http://localhost:8082/docs"

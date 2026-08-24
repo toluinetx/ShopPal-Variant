@@ -12,6 +12,7 @@ kubectl apply -f 20-server.yaml
 kubectl apply -f 30-support.yaml
 kubectl apply -f 31-notifications.yaml
 kubectl apply -f 40-client.yaml
+kubectl apply -f 41-admin.yaml
 kubectl apply -f 50-ingress.yaml
 kubectl apply -f 60-network-policies.yaml
 ```
@@ -26,7 +27,7 @@ kubectl apply -f .
 
 | Manifest | Purpose |
 |----------|---------|
-| `01-configmap.yaml` | Non-secret config: JWT expiry, cookie settings, CORS origins |
+| `01-configmap.yaml` | Non-secret config: JWT expiry, cookie settings, CORS origins (`client` and `admin`) |
 | `02-secret.yaml` | DB credentials, JWT signing secret, connection strings |
 | `05-db-schema-configmap.yaml` | The `server` API's SQL schema (tables + enums), mounted into Postgres's init directory |
 | `10-postgres.yaml` | PostgreSQL 16 StatefulSet + PVC. Runs the schema ConfigMap above on first boot (empty data dir only) |
@@ -34,10 +35,11 @@ kubectl apply -f .
 | `30-support.yaml` | Go support/ticketing service + HPA + hardened SecurityContext (self-migrates its own tables on boot) |
 | `31-notifications.yaml` | Go notifications sink (event log for support; no database) |
 | `40-client.yaml` | React static bundle served by nginx:alpine |
-| `50-ingress.yaml` | nginx-ingress with TLS via cert-manager |
+| `41-admin.yaml` | Admin frontend (product/price/stock management) — React static bundle served by nginx:alpine, guarded by admin-only JWTs from `server` |
+| `50-ingress.yaml` | nginx-ingress with TLS via cert-manager, routes `shop.example.com` to `client` and `admin.shop.example.com` to `admin` |
 | `60-network-policies.yaml` | Default-deny + explicit allow rules for internal traffic |
 
-Images are expected at `ghcr.io/shoppal/{server,support,notifications,client}:latest`.
+Images are expected at `ghcr.io/shoppal/{server,support,notifications,client,admin}:latest`.
 Adjust `image:` fields to point at your registry.
 
 ## Why the schema ConfigMap exists

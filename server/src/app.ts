@@ -9,6 +9,7 @@ dotenv.config();
 import { AppDataSource } from '@/shared/db/pg.data-source';
 import UserRouter from '@/api/users/user.router';
 import AuthRouter from '@/api/auth/auth.router';
+import AdminRouter from '@/api/admin/admin.router';
 import OrderRouter from '@/api/orders/order.router';
 import CartRouter from '@/api/carts/carts.router';
 import ReviewRouter from '@/api/reviews/review.router';
@@ -24,7 +25,12 @@ const PORT = 3000;
 // Middlewares (before routes):
 app.use(
 	process.env.NODE_ENV === 'production'
-		? cors({ origin: process.env.CLIENT_PROD_URL, credentials: true })
+		? cors({
+				origin: [process.env.CLIENT_PROD_URL, process.env.ADMIN_PROD_URL].filter(
+					(origin): origin is string => !!origin
+				),
+				credentials: true,
+			})
 		: corsMiddleware
 );
 app.use(express.json());
@@ -51,6 +57,7 @@ mountApiDocs(app);
 // Routes:
 app.use('/user', UserRouter);
 app.use('/auth', AuthRouter);
+app.use('/admin', AdminRouter);
 app.use('/order', OrderRouter);
 app.use('/cart', CartRouter);
 app.use('/review', ReviewRouter);

@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin
+  namespace: shoppal
+spec:
+  selector:
+    app: admin
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin
+  namespace: shoppal
+  labels:
+    app: admin
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: admin
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: admin
+    spec:
+      containers:
+        - name: admin
+          image: ghcr.io/shoppal/admin:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"

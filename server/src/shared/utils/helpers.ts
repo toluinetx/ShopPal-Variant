@@ -57,7 +57,12 @@ export class PGDataTransformer {
 export class JWTHelper {
     public static signAccessToken(userPayload: JwtPayload): string {
         return jwt.sign(
-            { user_id: userPayload.user_id, username: userPayload.username, email: userPayload.email },
+            {
+                user_id: userPayload.user_id,
+                username: userPayload.username,
+                email: userPayload.email,
+                ...(userPayload.role ? { role: userPayload.role } : {}),
+            },
             process.env.JWT_SECRET!,
             {
                 expiresIn: process.env.JWT_ACCESS_TOKEN_LENGTH!,
@@ -67,7 +72,12 @@ export class JWTHelper {
 
     public static signRefreshToken(userPayload: JwtPayload): string {
         return jwt.sign(
-            { user_id: userPayload.user_id, username: userPayload.username, email: userPayload.email },
+            {
+                user_id: userPayload.user_id,
+                username: userPayload.username,
+                email: userPayload.email,
+                ...(userPayload.role ? { role: userPayload.role } : {}),
+            },
             process.env.JWT_SECRET!,
             {
                 expiresIn: process.env.JWT_REFRESH_TOKEN_LENGTH!,
