@@ -4,6 +4,7 @@ import LoadingAnimation from '@/shared/components/LoadingAnimation';
 import OrderSuccess from './components/OrderSuccess';
 import CheckoutForm from './components/CheckoutForm';
 import CartTable from './components/CartTable';
+import { CouponSection } from './components/CouponSection';
 import { useFormData } from './hooks/useFormData';
 import { useOrderHandlers } from './hooks/useOrderHandling';
 import { ProductDetails } from './types/ProductDetails';
@@ -12,11 +13,28 @@ export function CheckoutPage() {
     const location = useLocation();
     const { itemsInCart } = location.state || { itemsInCart: [] };
     const totalQuantity = itemsInCart.reduce((total: number, item: ProductDetails) => total + item.quantity, 0);
-    const totalPrice = itemsInCart
-        .reduce((total: number, item: ProductDetails) => total + parseFloat(item.price) * item.quantity, 0)
-        .toFixed(2);
+    const subtotalNum = itemsInCart.reduce(
+        (total: number, item: ProductDetails) => total + parseFloat(item.price) * item.quantity,
+        0
+    );
+    const totalPrice = subtotalNum.toFixed(2);
+
+    const [couponCode, setCouponCode] = useState<string | null>(null);
+    const [discount, setDiscount] = useState<number>(0);
     const [fillDetails, setFillDetails] = useState(false);
-    const { formData, setFormData, formErrors, setFormErrors, handleChange } = useFormData(fillDetails);
+    const {
+        formData,
+        setFormData,
+        formErrors,
+        setFormErrors,
+        handleChange,
+        savedAddresses,
+        applySavedAddress,
+        savedPaymentMethods,
+        selectedPaymentMethodId,
+        applySavedPaymentMethod,
+        clearSelectedPaymentMethod,
+    } = useFormData(fillDetails);
     const {
         showBillingInfo,
         orderSuccess,
@@ -24,7 +42,15 @@ export function CheckoutPage() {
         isLoading,
         handleOrder,
         handleContinue,
-    } = useOrderHandlers(itemsInCart, formData, setFormErrors);
+    } = useOrderHandlers(
+        itemsInCart,
+        formData,
+        setFormErrors,
+        couponCode ?? undefined,
+        selectedPaymentMethodId ?? undefined
+    );
+
+    const grandTotal = Math.max(0, subtotalNum - discount).toFixed(2);
 
     return (
         <main className="container relative flex flex-1 flex-row justify-between tablet-lg:gap-4 tablet-md:flex-col-reverse">
@@ -48,6 +74,12 @@ export function CheckoutPage() {
                             setFillDetails={setFillDetails}
                             setFormData={setFormData}
                             handleOrder={handleOrder}
+                            savedAddresses={savedAddresses}
+                            onSelectSavedAddress={applySavedAddress}
+                            savedPaymentMethods={savedPaymentMethods}
+                            selectedPaymentMethodId={selectedPaymentMethodId}
+                            onSelectSavedPaymentMethod={applySavedPaymentMethod}
+                            onClearSavedPaymentMethod={clearSelectedPaymentMethod}
                         />
                     </section>
                     <aside className="my-3 flex flex-col gap-6">
@@ -58,6 +90,25 @@ export function CheckoutPage() {
                                 totalQuantity={totalQuantity}
                                 totalPrice={totalPrice}
                             />
+                            <div className="mt-4 flex flex-col gap-2 pl-3">
+                                <CouponSection
+                                    subtotal={subtotalNum}
+                                    couponCode={couponCode}
+                                    setCouponCode={setCouponCode}
+                                    discount={discount}
+                                    setDiscount={setDiscount}
+                                />
+                                {discount > 0 && (
+                                    <div className="flex justify-between text-sm text-green-700">
+                                        <span>Discount</span>
+                                        <span>-${discount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between border-t border-primary-200 pt-2 text-lg font-bold">
+                                    <span>You pay</span>
+                                    <span>${grandTotal}</span>
+                                </div>
+                            </div>
                         </section>
                     </aside>
                 </>

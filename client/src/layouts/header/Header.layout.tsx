@@ -6,6 +6,7 @@ import { IconLogin, IconLogout, IconSignup, IconTheme, IconGithub } from '@/shar
 import { useApi } from '@/shared/hooks';
 import Hamburger from 'hamburger-react';
 import { HamburgerMenu } from './components/HamburgerMenu.component';
+import { NotificationBell } from './components/NotificationBell';
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery.hook';
 
 export function Header() {
@@ -86,9 +87,14 @@ export function Header() {
                             <Link to="/support">Support</Link>
                         </li>
                         {auth?.user && (
-                            <li>
-                                <Link to={`/profile/${auth?.user.user_id}`}>Profile</Link>
-                            </li>
+                            <>
+                                <li>
+                                    <Link to="/wishlist">Wishlist</Link>
+                                </li>
+                                <li>
+                                    <Link to={`/profile/${auth?.user.user_id}`}>Profile</Link>
+                                </li>
+                            </>
                         )}
                     </ul>
                 </nav>
@@ -101,6 +107,13 @@ export function Header() {
                         tablet-md:gap-2 
                         tablet-sm:flex-col tablet-sm:items-center tablet-sm:justify-center tablet-sm:gap-4"
                     >
+                        {/* Notification bell (logged-in only) */}
+                        {auth?.user && (
+                            <li>
+                                <NotificationBell />
+                            </li>
+                        )}
+
                         {/* Auth */}
                         {auth?.user ? (
                             <li>

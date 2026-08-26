@@ -1,12 +1,16 @@
+import { useEffect } from 'react';
 import { useParams, useLocation } from 'react-router';
 import { useProduct } from './hooks/useProduct.hook';
 import { ProductDetails } from './components/ProductDetails';
 import { ProductReviews } from './components/ProductReviews';
 import { ProductSimilarResults } from './components/ProductSimilarResults';
+import { ProductQnA } from './components/ProductQnA';
 import { ImageSlider } from '@/shared/components/ImageSlider';
 import LoadingAnimation from '@/shared/components/LoadingAnimation';
 import { useMessages } from '@/shared/hooks/useMessages.hook';
 import { useNavigate } from 'react-router';
+import { useAuth } from '@/shared/hooks/useAuth.hook';
+import { useApi } from '@/shared/hooks/useApi.hook';
 
 type ProductPageParams = {
     id: string;
@@ -17,6 +21,9 @@ export const ProductPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { displayMessage } = useMessages();
+    const { auth } = useAuth();
+    const { recentlyViewedApi } = useApi();
+
     if (!params.id) {
         displayMessage({ message: 'id not found', type: 'error' });
         navigate('/404');
@@ -26,6 +33,15 @@ export const ProductPage = () => {
         product_id: params.id,
         initialProduct: location.state?.product,
     });
+
+    // Deep chain: record every product view so the user gets a "recently viewed"
+    // strip on the home page. Fire-and-forget – failure never blocks.
+    useEffect(() => {
+        if (!auth?.user || !params.id) return;
+        recentlyViewedApi.record(auth.user.user_id, params.id).catch(() => {
+            /* silent */
+        });
+    }, [auth?.user, params.id, recentlyViewedApi]);
 
     if (!currentProduct && fetchProductState.isLoading) {
         return (
@@ -45,16 +61,14 @@ export const ProductPage = () => {
                 <div className="m-4">
                     <div className="flex flex-col justify-between gap-16 lg:flex-row lg:items-center lg:justify-center">
                         <div className="flex flex-col gap-6 lg:w-2/5">
-                            <ImageSlider
-                                images={currentProduct?.images}
-                                className="h-[50vh]"
-                            />
+                            <ImageSlider images={currentProduct?.images} className="h-[50vh]" />
                         </div>
                         <div className="flex flex-col gap-4 overflow-auto lg:w-3/5">
                             <ProductDetails product={currentProduct!} />
                         </div>
                     </div>
                     <ProductSimilarResults product={currentProduct!} />
+                    <ProductQnA productId={currentProduct!.product_id} />
                     <ProductReviews product_id={currentProduct!.product_id} />
                 </div>
             </div>

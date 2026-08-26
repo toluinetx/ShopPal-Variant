@@ -104,4 +104,60 @@ export const OrderRepository = AppDataSource.getRepository(Order).extend({
 			)
 		);
 	},
+
+	async getSingleOrder(order_id: string, user_id: string) {
+		const rows = await this.createQueryBuilder('o')
+			.select([
+				'o.order_id',
+				'o.issued_time',
+				'o.order_status',
+				'o.delivery_address',
+				'o.billing_info',
+				'o.coupon_code',
+				'o.discount_amount',
+				'o.subtotal',
+				'o.total',
+				'o.payment_method_id',
+				'json_agg(json_build_object(' +
+					"'product_id', opl.product_id, " +
+					"'quantity', opl.quantity, " +
+					"'title', p.title, " +
+					"'thumbnail', p.thumbnail, " +
+					"'price', p.price, " +
+					"'brand', p.brand" +
+					')) as products',
+			])
+			.innerJoin(OrderUserLink, 'oul', 'o.order_id = oul.order_id')
+			.innerJoin(OrderProductLink, 'opl', 'o.order_id = opl.order_id')
+			.innerJoin(Product, 'p', 'opl.product_id = p.product_id')
+			.where('o.order_id = :order_id', { order_id })
+			.andWhere('oul.user_id = :user_id', { user_id })
+			.groupBy('o.order_id')
+			.getRawMany();
+
+		if (!rows.length) return null;
+		const row = rows[0];
+		return {
+			order_id: row.o_order_id,
+			issued_time: row.o_issued_time,
+			order_status: row.o_order_status,
+			delivery_address: PGDataTransformer.fromPGCompositeType(Address)(row.o_delivery_address),
+			billing_info: row.o_billing_info,
+			coupon_code: row.o_coupon_code,
+			discount_amount: row.o_discount_amount,
+			subtotal: row.o_subtotal,
+			total: row.o_total,
+			payment_method_id: row.o_payment_method_id,
+			products: row.products,
+		};
+	},
+
+	async getProductsForOrder(order_id: string): Promise<Array<{ product_id: string; quantity: number }>> {
+		return AppDataSource.createQueryBuilder()
+			.select('opl.product_id', 'product_id')
+			.addSelect('opl.quantity', 'quantity')
+			.from(OrderProductLink, 'opl')
+			.where('opl.order_id = :order_id', { order_id })
+			.getRawMany();
+	},
 });

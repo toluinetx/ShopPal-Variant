@@ -66,6 +66,26 @@ export function HamburgerMenu({ isMenuOpen, onLinkClick }: HamburgerMenuProps) {
                                     </Link>
                                 </li>
                             )}
+                            {auth?.user && (
+                                <li>
+                                    <Link
+                                        to="/wishlist"
+                                        onClick={() => onLinkClick((prev) => !prev)}
+                                    >
+                                        Wishlist
+                                    </Link>
+                                </li>
+                            )}
+                            {auth?.user && (
+                                <li>
+                                    <Link
+                                        to="/notifications"
+                                        onClick={() => onLinkClick((prev) => !prev)}
+                                    >
+                                        Notifications
+                                    </Link>
+                                </li>
+                            )}
                             <hr className="border-1 w-full border-solid border-text-950" />
                             <li className="flex w-full flex-row items-center justify-center gap-20">
                                 <Link

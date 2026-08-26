@@ -7,6 +7,7 @@ import {
     OrderItemDeliveryAddress,
     OrderItemStatus,
     OrderItemProductsTable,
+    OrderItemActions,
 } from '@/pages/profile/components/order-history';
 import OrderItemAccordion from '@/shared/components/Accordion';
 import LoadingAnimation from '@/shared/components/LoadingAnimation';
@@ -14,7 +15,7 @@ import { IconMenu } from '@/shared/components/icons';
 import { useInfiniteScroll } from '@/shared/hooks';
 
 export function OrderHistory() {
-    const { orders, isLoading, isError, conditionsToFetchNewPage, fetchNextPage, isFetchingNextPage } =
+    const { orders, isLoading, isError, conditionsToFetchNewPage, fetchNextPage, isFetchingNextPage, refetch } =
         useOrderHistory();
     const isSuceess = !isLoading && !isError;
     const hasOrders = orders.length > 0;
@@ -67,6 +68,11 @@ export function OrderHistory() {
                     )}
                 >
                     <OrderItemProductsTable products={order.products} />
+                    <OrderItemActions
+                        orderID={order.order_id}
+                        orderStatus={order.order_status}
+                        onCancelled={() => refetch()}
+                    />
                 </OrderItemAccordion>
             ))}
             {isFetchingNextPage && <LoadingAnimation />}

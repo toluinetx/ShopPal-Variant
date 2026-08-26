@@ -59,6 +59,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      notifications:
+        condition: service_started
     environment:
       NODE_ENV: "${NODE_ENV:-development}"
       DB_CONNECTION_URL: "postgres://${POSTGRES_USER:-shoppal}:${POSTGRES_PASSWORD:-shoppal}@postgres:5432/${POSTGRES_DB:-shoppal}"
@@ -70,6 +72,7 @@ services:
       COOKIE_REFRESH_TOKEN_NAME: "${COOKIE_REFRESH_TOKEN_NAME:-refreshToken}"
       COOKIE_REFRESH_TOKEN_AGE: "${COOKIE_REFRESH_TOKEN_AGE:-604800000}"
       BCRYPT_HASH_LENGTH: "${BCRYPT_HASH_LENGTH:-10}"
+      NOTIFICATIONS_URL: "http://notifications:8082"
     ports:
       - "${SERVER_PORT:-3000}:3000"
 

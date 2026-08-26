@@ -138,6 +138,7 @@ export const createOrderForGuestUserSchema: Schema = {
         trim: true,
         errorMessage: 'Unknown validation error occurred for parameter "delivery_address.street"!',
     },
+    coupon_code: { in: ['body'], optional: true, isString: true, trim: true, toUpperCase: true },
 };
 
 export const createOrderForAuthenticatedUserSchema: Schema = {
@@ -255,34 +256,24 @@ export const createOrderForAuthenticatedUserSchema: Schema = {
         trim: true,
         errorMessage: 'Unknown validation error occurred for parameter "delivery_address.street"!',
     },
+    coupon_code: { in: ['body'], optional: true, isString: true, trim: true, toUpperCase: true },
+    payment_method_id: { in: ['body'], optional: true, isUUID: true },
 };
 
 export const updateOrderSchema: Schema = {
     order_id: {
         in: ['params'],
-        notEmpty: {
-            errorMessage: 'Order ID is required!',
-        },
-        isUUID: {
-            errorMessage: 'Order ID must be a valid UUID!',
-        },
-        errorMessage: 'Unknown validation error occurred for parameter "order_id"!',
+        notEmpty: { errorMessage: 'Order ID is required!' },
+        isUUID: { errorMessage: 'Order ID must be a valid UUID!' },
     },
 
     user_id: {
         in: ['body'],
-
-        notEmpty: {
-            errorMessage: 'User ID is required!',
-        },
-
-        // TODO: In the future it might change so that only admins can update orders. For now, we will keep it as though only the user who created the order can update it.
+        notEmpty: { errorMessage: 'User ID is required!' },
         custom: {
             options: (value, { req }) => value === req.jwtDecodedPayload?.user_id,
             errorMessage: 'User ID does not match with the logged in user ID!',
         },
-
-        errorMessage: 'Unknown validation error occurred for parameter "user_id"!',
     },
 
     order_status: {
@@ -339,29 +330,33 @@ export const updateOrderSchema: Schema = {
 export const deleteOrderSchema: Schema = {
     order_id: {
         in: ['params'],
-        notEmpty: {
-            errorMessage: 'Order ID is required!',
-        },
-        isUUID: {
-            errorMessage: 'Order ID must be a valid UUID!',
-        },
-        errorMessage: 'Unknown validation error occurred for parameter "order_id"!',
+        notEmpty: { errorMessage: 'Order ID is required!' },
+        isUUID: { errorMessage: 'Order ID must be a valid UUID!' },
     },
 
     user_id: {
         in: ['body'],
-
-        notEmpty: {
-            errorMessage: 'User ID is required!',
-        },
-
-        // TODO: In the future it might change so that only admins can update orders. For now, we will keep it as though only the user who created the order can update it.
+        notEmpty: { errorMessage: 'User ID is required!' },
         custom: {
             options: (value, { req }) => value === req.jwtDecodedPayload?.user_id,
             errorMessage: 'User ID does not match with the logged in user ID!',
         },
+    },
+};
 
-        errorMessage: 'Unknown validation error occurred for parameter "user_id"!',
+export const getSingleOrderSchema: Schema = {
+    order_id: {
+        in: ['params'],
+        notEmpty: { errorMessage: 'Order ID is required!' },
+        isUUID: true,
+    },
+};
+
+export const reorderSchema: Schema = {
+    order_id: {
+        in: ['params'],
+        notEmpty: { errorMessage: 'Order ID is required!' },
+        isUUID: true,
     },
 };
 

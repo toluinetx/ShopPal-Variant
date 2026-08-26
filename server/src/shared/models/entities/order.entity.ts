@@ -27,6 +27,21 @@ export class Order {
     })
     delivery_address: Address;
 
+    @Column({ type: 'text', nullable: true })
+    coupon_code: string;
+
+    @Column({ type: 'real', default: 0 })
+    discount_amount: number;
+
+    @Column({ type: 'real', nullable: true })
+    subtotal: number;
+
+    @Column({ type: 'real', nullable: true })
+    total: number;
+
+    @Column({ type: 'uuid', nullable: true })
+    payment_method_id: string;
+
     @OneToMany(() => OrderUserLink, (orderUserLink) => orderUserLink.order)
     orderUserLinks: Promise<OrderUserLink[]>;
 

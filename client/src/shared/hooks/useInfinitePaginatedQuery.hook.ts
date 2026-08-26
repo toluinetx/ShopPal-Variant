@@ -27,6 +27,7 @@ export const useInfinitePaginatedQuery = (
         isError,
         error,
         isSuccess,
+        refetch,
     } = useInfiniteQuery({
         queryKey: [stringKey, itemsPerPage, filters],
         queryFn: runQuery,
@@ -53,5 +54,6 @@ export const useInfinitePaginatedQuery = (
         isFetchingNextPage,
         hasNextPage,
         fetchNextPage,
+        refetch,
     };
 };

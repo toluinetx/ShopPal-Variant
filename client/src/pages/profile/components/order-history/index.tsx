@@ -6,3 +6,4 @@ export { OrderItemIssuedTime } from './OrderItemIssuedTime.component';
 export { OrderItemDeliveryAddress } from './OrderItemDeliveryAddress.component';
 export { OrderItemStatus } from './OrderItemStatus.component';
 export { OrderItemProductsTable } from './OrderItemProductsTable.component';
+export { OrderItemActions } from './OrderItemActions.component';

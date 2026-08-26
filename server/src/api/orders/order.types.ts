@@ -14,6 +14,8 @@ export type CreateOrderForGuestUserProps = {
 	quantities: number[];
 	billing_info: string;
 	delivery_address: Address;
+	coupon_code?: string;
+	payment_method_id?: string;
 };
 
 export type CreateOrderForAuthenticatedUserProps = {

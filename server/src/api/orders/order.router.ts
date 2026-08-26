@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { check, checkSchema } from 'express-validator';
+import { checkSchema } from 'express-validator';
 import { OrderController } from '@/api/orders/order.controller';
 import { validationMiddleware, authorizationMiddleware, tryCatchMiddleware } from '@/middlewares';
 import {
@@ -9,6 +9,8 @@ import {
     updateOrderSchema,
     deleteOrderSchema,
     updateProductsStocksSchema,
+    getSingleOrderSchema,
+    reorderSchema,
 } from '@/api/orders/order.validator';
 
 const router = Router();
@@ -19,6 +21,15 @@ router.get(
     checkSchema(getOrdersSchema),
     validationMiddleware,
     tryCatchMiddleware(OrderController.getOrders)
+);
+
+// Deep chain: fetch a single order for details/tracking page.
+router.get(
+    '/single/:order_id',
+    authorizationMiddleware,
+    checkSchema(getSingleOrderSchema),
+    validationMiddleware,
+    tryCatchMiddleware(OrderController.getSingleOrder)
 );
 
 router.post(
@@ -34,6 +45,15 @@ router.post(
     checkSchema(createOrderForAuthenticatedUserSchema),
     validationMiddleware,
     tryCatchMiddleware(OrderController.createOrderForAuthenticatedUser)
+);
+
+// Deep chain: copy previous order lines back into the current cart.
+router.post(
+    '/:order_id/reorder',
+    authorizationMiddleware,
+    checkSchema(reorderSchema),
+    validationMiddleware,
+    tryCatchMiddleware(OrderController.reorder)
 );
 
 router.patch(

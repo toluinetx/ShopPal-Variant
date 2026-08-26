@@ -1,5 +1,6 @@
 import React, { ChangeEvent, FormEvent } from 'react';
 import FormInputField from './FormInputField';
+import type { SavedAddress, PaymentMethod } from '@/shared/types/entities.types';
 
 
 type FormData = {
@@ -26,9 +27,30 @@ type CheckoutFormProps = {
     fillDetails: boolean;
     setFillDetails: React.Dispatch<React.SetStateAction<boolean>>;
     handleChange: (event: ChangeEvent<HTMLInputElement>) => void;
+    savedAddresses?: SavedAddress[];
+    onSelectSavedAddress?: (addressId: string) => void;
+    savedPaymentMethods?: PaymentMethod[];
+    selectedPaymentMethodId?: string | null;
+    onSelectSavedPaymentMethod?: (paymentMethodId: string) => void;
+    onClearSavedPaymentMethod?: () => void;
 };
 
-const CheckoutForm: React.FC<CheckoutFormProps> = ({ formData, formErrors, showBillingInfo, handleOrder, handleContinue, fillDetails, setFillDetails, handleChange }) => {
+const CheckoutForm: React.FC<CheckoutFormProps> = ({
+    formData,
+    formErrors,
+    showBillingInfo,
+    handleOrder,
+    handleContinue,
+    fillDetails,
+    setFillDetails,
+    handleChange,
+    savedAddresses = [],
+    onSelectSavedAddress,
+    savedPaymentMethods = [],
+    selectedPaymentMethodId,
+    onSelectSavedPaymentMethod,
+    onClearSavedPaymentMethod,
+}) => {
     return (
         <form onSubmit={handleOrder} className="flex w-full flex-col space-y-4">
             {!showBillingInfo && (
@@ -44,6 +66,27 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ formData, formErrors, showB
                         />
                         <label htmlFor="fill-details"> Fill details from profile</label>
                     </section>
+                    {savedAddresses.length > 0 && (
+                        <section>
+                            <label htmlFor="saved-address" className="mb-1 block text-sm font-medium">
+                                Use a saved address
+                            </label>
+                            <select
+                                id="saved-address"
+                                defaultValue=""
+                                onChange={(e) => e.target.value && onSelectSavedAddress?.(e.target.value)}
+                                className="w-full rounded-md border border-primary-200 px-3 py-2"
+                            >
+                                <option value="">Select a saved address…</option>
+                                {savedAddresses.map((a) => (
+                                    <option key={a.address_id} value={a.address_id}>
+                                        {a.label} — {a.address.street}, {a.address.city}
+                                        {a.is_default ? ' (default)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </section>
+                    )}
                     <FormInputField
                         id="first-name"
                         name="firstName"
@@ -121,6 +164,33 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ formData, formErrors, showB
                         error={formErrors.phone}
                     />
                     <h1 className="my-3 text-4xl">Billing info</h1>
+                    {savedPaymentMethods.length > 0 && (
+                        <section>
+                            <label htmlFor="saved-payment-method" className="mb-1 block text-sm font-medium">
+                                Use a saved card
+                            </label>
+                            <select
+                                id="saved-payment-method"
+                                value={selectedPaymentMethodId ?? ''}
+                                onChange={(e) => {
+                                    if (e.target.value) {
+                                        onSelectSavedPaymentMethod?.(e.target.value);
+                                    } else {
+                                        onClearSavedPaymentMethod?.();
+                                    }
+                                }}
+                                className="w-full rounded-md border border-primary-200 px-3 py-2"
+                            >
+                                <option value="">Enter a new card…</option>
+                                {savedPaymentMethods.map((m) => (
+                                    <option key={m.payment_method_id} value={m.payment_method_id}>
+                                        {m.brand ?? 'Card'} •••• {m.last_four ?? '****'}
+                                        {m.is_default ? ' (default)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </section>
+                    )}
                     <FormInputField
                         id="card-number"
                         name="cardNumber"
@@ -128,6 +198,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ formData, formErrors, showB
                         onChange={handleChange}
                         placeholder="Card Number"
                         error={formErrors.cardNumber}
+                        disabled={!!selectedPaymentMethodId}
                     />
                     <FormInputField
                         id="expiry-date"

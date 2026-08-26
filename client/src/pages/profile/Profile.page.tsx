@@ -2,9 +2,11 @@ import { UserBasicInfo } from '@/pages/profile/components/UserBasicInfo.componen
 import { OrderHistory } from '@/pages/profile/components/order-history/OrderHistory.component';
 import { ProfileEdit } from './components/ProfileEdit';
 import { AdvancedUserInfo } from './components/AdvancedUserInfo';
+import { AddressesPage } from '@/pages/account/Addresses.page';
+import { PaymentMethodsPage } from '@/pages/account/PaymentMethods.page';
 import { useState } from 'react';
 
-type ProfilePageTab = 'Advanced Info' | 'Order History' | 'Edit Profile';
+type ProfilePageTab = 'Advanced Info' | 'Order History' | 'Edit Profile' | 'Addresses' | 'Payment Methods';
 
 export function ProfilePage() {
     const [pageTab, setPageTab] = useState<ProfilePageTab>('Advanced Info');
@@ -35,11 +37,27 @@ export function ProfilePage() {
                 >
                     Profile Edit
                 </button>
+                <button
+                    onClick={() => setPageTab('Addresses')}
+                    className="rounded-sm border border-primary-200 bg-primary-100 px-3 py-1 font-semibold data-[selected=true]:bg-primary-300 data-[selected=true]:text-white"
+                    data-selected={pageTab === 'Addresses'}
+                >
+                    Addresses
+                </button>
+                <button
+                    onClick={() => setPageTab('Payment Methods')}
+                    className="rounded-sm border border-primary-200 bg-primary-100 px-3 py-1 font-semibold data-[selected=true]:bg-primary-300 data-[selected=true]:text-white"
+                    data-selected={pageTab === 'Payment Methods'}
+                >
+                    Payment Methods
+                </button>
             </div>
 
             {pageTab === 'Advanced Info' && <AdvancedUserInfo />}
             {pageTab === 'Order History' && <OrderHistory />}
             {pageTab === 'Edit Profile' && <ProfileEdit />}
+            {pageTab === 'Addresses' && <AddressesPage />}
+            {pageTab === 'Payment Methods' && <PaymentMethodsPage />}
         </main>
     );
 }

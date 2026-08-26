@@ -30,6 +30,7 @@ export function useOrderHistory() {
         isFetchNextPageError,
         error,
         fetchNextPage,
+        refetch,
     } = useInfinitePaginatedQuery('orders', fetchOrders, { userId: auth?.user.user_id }, 10);
 
     const conditionsToFetchNewPage = useCallback(
@@ -53,5 +54,6 @@ export function useOrderHistory() {
         error,
         fetchNextPage,
         conditionsToFetchNewPage,
+        refetch,
     };
 }

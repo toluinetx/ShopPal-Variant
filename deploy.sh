@@ -31,8 +31,8 @@ for i in $(seq 1 30); do
 done
 
 echo "Deployed:"
-echo "  App:              http://localhost:8080"
+echo "  App:              http://localhost:8087"
 echo "  Admin panel:      http://localhost:8090  (login: admin / Admin123!)"
 echo "  Server API docs:  http://localhost:3000/docs"
-echo "  Support API docs: http://localhost:8081/docs"
-echo "  Notifications API docs: http://localhost:8082/docs"
+echo "  Support API docs: http://localhost:8086/docs"
+echo "  Notifications API docs: http://localhost:8085/docs"

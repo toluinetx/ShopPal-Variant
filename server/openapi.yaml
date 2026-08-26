@@ -19,6 +19,14 @@ tags:
   - name: Carts
   - name: Orders
   - name: Reviews
+  - name: Wishlist
+  - name: Addresses
+  - name: PaymentMethods
+  - name: Coupons
+  - name: Tracking
+  - name: QnA
+  - name: RecentlyViewed
+  - name: Notifications
 servers:
   - url: /
     description: Same-origin (behind ingress / reverse proxy)
@@ -770,6 +778,351 @@ paths:
           description: Deleted
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  # --- Wishlist ------------------------------------------------------------
+  /wishlist/{user_id}:
+    get:
+      tags: [Wishlist]
+      summary: List items in the user's wishlist (with products)
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Wishlist]
+      summary: Add a product to the wishlist
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id]
+              properties:
+                product_id: { type: string, format: uuid }
+      responses:
+        "201": { description: Added }
+    delete:
+      tags: [Wishlist]
+      summary: Clear the entire wishlist
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200": { description: Cleared }
+  /wishlist/{user_id}/{product_id}:
+    delete:
+      tags: [Wishlist]
+      summary: Remove a single product from the wishlist
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200": { description: Removed }
+  /wishlist/{user_id}/{product_id}/move-to-cart:
+    post:
+      tags: [Wishlist]
+      summary: Move a wishlist item into the cart in a single call (chain)
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity: { type: integer, minimum: 1, default: 1 }
+      responses:
+        "200": { description: Moved to cart }
+
+  # --- Address book --------------------------------------------------------
+  /address/{user_id}:
+    get:
+      tags: [Addresses]
+      summary: List the user's saved addresses (default first)
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses: { "200": { description: OK } }
+    post:
+      tags: [Addresses]
+      summary: Save a new address
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses: { "201": { description: Created } }
+  /address/{user_id}/{address_id}:
+    patch:
+      tags: [Addresses]
+      summary: Update an address
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: address_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses: { "204": { description: Updated } }
+    delete:
+      tags: [Addresses]
+      summary: Delete an address
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: address_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses: { "204": { description: Deleted } }
+  /address/{user_id}/{address_id}/set-default:
+    post:
+      tags: [Addresses]
+      summary: Mark an address as the user's default
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: address_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses: { "200": { description: OK } }
+
+  # --- Payment methods -----------------------------------------------------
+  /payment-method/{user_id}:
+    get:
+      tags: [PaymentMethods]
+      summary: List saved payment methods (last-four + brand only)
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses: { "200": { description: OK } }
+    post:
+      tags: [PaymentMethods]
+      summary: Add a new payment method (tokenized metadata only)
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses: { "201": { description: Created } }
+  /payment-method/{user_id}/{payment_method_id}:
+    delete:
+      tags: [PaymentMethods]
+      summary: Delete a payment method
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: payment_method_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses: { "204": { description: Deleted } }
+  /payment-method/{user_id}/{payment_method_id}/set-default:
+    post:
+      tags: [PaymentMethods]
+      summary: Mark a payment method as the user's default
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: payment_method_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses: { "200": { description: OK } }
+
+  # --- Coupons -------------------------------------------------------------
+  /coupon:
+    get:
+      tags: [Coupons]
+      summary: List active coupons currently redeemable
+      security: []
+      responses: { "200": { description: OK } }
+    post:
+      tags: [Coupons]
+      summary: Create a coupon (admin only)
+      responses:
+        "201": { description: Created }
+        "403": { description: Forbidden }
+  /coupon/validate:
+    post:
+      tags: [Coupons]
+      summary: Dry-run a coupon against a subtotal (no usage increment)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, subtotal]
+              properties:
+                code: { type: string }
+                subtotal: { type: number }
+      responses: { "200": { description: Validation result } }
+  /coupon/apply:
+    post:
+      tags: [Coupons]
+      summary: Apply a coupon at checkout (increments usage) – requires auth
+      responses: { "200": { description: Applied } }
+
+  # --- Order tracking ------------------------------------------------------
+  /tracking/{order_id}:
+    get:
+      tags: [Tracking]
+      summary: Full tracking timeline for an order
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses: { "200": { description: OK } }
+    post:
+      tags: [Tracking]
+      summary: Push a new tracking event (admin only)
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [order_placed, payment_confirmed, processing, packed, shipped, out_for_delivery, delivered, cancelled]
+                location: { type: string }
+                message: { type: string }
+      responses:
+        "201": { description: Event added }
+
+  /order/single/{order_id}:
+    get:
+      tags: [Orders]
+      summary: Fetch a single order by id (with products, coupon, totals)
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: OK }
+        "404": { description: Not found }
+  /order/{order_id}/reorder:
+    post:
+      tags: [Orders]
+      summary: Push all items from a past order back into the cart (chain)
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Items added to cart }
+
+  # --- Product Q&A ---------------------------------------------------------
+  /qna/{product_id}:
+    get:
+      tags: [QnA]
+      summary: List questions (with answers) for a product
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses: { "200": { description: OK } }
+    post:
+      tags: [QnA]
+      summary: Ask a new question
+      parameters: [{ $ref: "#/components/parameters/ProductId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+      responses: { "201": { description: Created } }
+  /qna/answer/{question_id}:
+    post:
+      tags: [QnA]
+      summary: Answer a question (drops a notification into the asker's inbox)
+      parameters:
+        - name: question_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses: { "201": { description: Created } }
+  /qna/{question_id}:
+    delete:
+      tags: [QnA]
+      summary: Delete your own question
+      parameters:
+        - name: question_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses: { "204": { description: Deleted } }
+
+  # --- Recently viewed -----------------------------------------------------
+  /recently-viewed/{user_id}:
+    get:
+      tags: [RecentlyViewed]
+      summary: List recently viewed products (newest first)
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - { name: limit, in: query, schema: { type: integer } }
+      responses: { "200": { description: OK } }
+    post:
+      tags: [RecentlyViewed]
+      summary: Record that the user viewed a product
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id]
+              properties:
+                product_id: { type: string, format: uuid }
+      responses:
+        "204": { description: Recorded }
+
+  # --- Notifications inbox -------------------------------------------------
+  /notifications/{user_id}:
+    get:
+      tags: [Notifications]
+      summary: List notifications for the user + unread count
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+        - { name: unread_only, in: query, schema: { type: boolean } }
+      responses: { "200": { description: OK } }
+  /notifications/{user_id}/{notification_id}/read:
+    post:
+      tags: [Notifications]
+      summary: Mark a single notification as read
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: notification_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses: { "200": { description: OK } }
+  /notifications/{user_id}/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark every notification as read
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses: { "200": { description: OK } }
+  /notifications/{user_id}/{notification_id}:
+    delete:
+      tags: [Notifications]
+      summary: Delete a notification
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: notification_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Deleted }
 
 components:
   securitySchemes:

@@ -14,6 +14,14 @@ import OrderRouter from '@/api/orders/order.router';
 import CartRouter from '@/api/carts/carts.router';
 import ReviewRouter from '@/api/reviews/review.router';
 import ProductRouter from '@/api/products/product.router';
+import WishlistRouter from '@/api/wishlist/wishlist.router';
+import AddressRouter from '@/api/addresses/addresses.router';
+import PaymentMethodRouter from '@/api/payment-methods/payment-methods.router';
+import CouponRouter from '@/api/coupons/coupons.router';
+import OrderTrackingRouter from '@/api/order-tracking/order-tracking.router';
+import QnaRouter from '@/api/qna/qna.router';
+import RecentlyViewedRouter from '@/api/recently-viewed/recently-viewed.router';
+import NotificationsInboxRouter from '@/api/notifications-inbox/notifications-inbox.router';
 import { errorMiddleware } from '@/middlewares/error.middleware';
 import corsMiddleware from './middlewares/cors.middleware';
 import { mountApiDocs } from './docs';
@@ -62,6 +70,14 @@ app.use('/order', OrderRouter);
 app.use('/cart', CartRouter);
 app.use('/review', ReviewRouter);
 app.use('/product', ProductRouter);
+app.use('/wishlist', WishlistRouter);
+app.use('/address', AddressRouter);
+app.use('/payment-method', PaymentMethodRouter);
+app.use('/coupon', CouponRouter);
+app.use('/tracking', OrderTrackingRouter);
+app.use('/qna', QnaRouter);
+app.use('/recently-viewed', RecentlyViewedRouter);
+app.use('/notifications', NotificationsInboxRouter);
 
 // Middlewares (after routes):
 app.use(errorMiddleware); // Every endpoint & middleware chain avaliable will eventually go to error middleware in case of exception thrown

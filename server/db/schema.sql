@@ -379,6 +379,221 @@ ALTER TABLE ONLY public."Cart"
 
 
 --
+-- Extended schema: new tables added for wishlist, address book, saved payment
+-- methods, coupons, order tracking, product Q&A, recently viewed, and in-app
+-- notification inbox. These extend the base commerce API to support deeper
+-- chained user workflows (wishlist -> move to cart -> apply coupon ->
+-- checkout with saved address & payment -> place order -> tracking timeline
+-- -> notifications -> reorder).
+--
+
+--
+-- New enum types
+--
+
+CREATE TYPE public."Coupon_type_enum" AS ENUM (
+    'percentage',
+    'flat'
+);
+
+CREATE TYPE public."OrderTracking_status_enum" AS ENUM (
+    'order_placed',
+    'payment_confirmed',
+    'processing',
+    'packed',
+    'shipped',
+    'out_for_delivery',
+    'delivered',
+    'cancelled'
+);
+
+CREATE TYPE public."UserNotification_type_enum" AS ENUM (
+    'order_placed',
+    'order_status_changed',
+    'order_cancelled',
+    'wishlist_price_drop',
+    'wishlist_back_in_stock',
+    'question_answered',
+    'coupon_issued',
+    'review_reply',
+    'general'
+);
+
+--
+-- Add extended columns to Order for coupon/discount/subtotal/payment method.
+--
+
+ALTER TABLE public."Order"
+    ADD COLUMN IF NOT EXISTS coupon_code text,
+    ADD COLUMN IF NOT EXISTS discount_amount real NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS subtotal real,
+    ADD COLUMN IF NOT EXISTS total real,
+    ADD COLUMN IF NOT EXISTS payment_method_id uuid;
+
+--
+-- Wishlist
+--
+
+CREATE TABLE IF NOT EXISTS public."Wishlist" (
+    user_id uuid NOT NULL,
+    product_id uuid NOT NULL,
+    added_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PK_Wishlist" PRIMARY KEY (user_id, product_id),
+    CONSTRAINT "FK_Wishlist_user" FOREIGN KEY (user_id) REFERENCES public."User"(user_id) ON DELETE CASCADE,
+    CONSTRAINT "FK_Wishlist_product" FOREIGN KEY (product_id) REFERENCES public."Product"(product_id) ON DELETE CASCADE
+);
+
+--
+-- Saved addresses (address book)
+--
+
+CREATE TABLE IF NOT EXISTS public."SavedAddress" (
+    address_id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
+    label text NOT NULL,
+    address text NOT NULL,
+    recipient_name text,
+    recipient_phone text,
+    is_default boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PK_SavedAddress" PRIMARY KEY (address_id),
+    CONSTRAINT "FK_SavedAddress_user" FOREIGN KEY (user_id) REFERENCES public."User"(user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "IDX_SavedAddress_user_id" ON public."SavedAddress" (user_id);
+
+--
+-- Payment methods (tokenized – only safe metadata)
+--
+
+CREATE TABLE IF NOT EXISTS public."PaymentMethod" (
+    payment_method_id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
+    type text NOT NULL,
+    label text NOT NULL,
+    last_four text,
+    brand text,
+    holder_name text,
+    exp_month integer,
+    exp_year integer,
+    is_default boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PK_PaymentMethod" PRIMARY KEY (payment_method_id),
+    CONSTRAINT "FK_PaymentMethod_user" FOREIGN KEY (user_id) REFERENCES public."User"(user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "IDX_PaymentMethod_user_id" ON public."PaymentMethod" (user_id);
+
+--
+-- Coupons
+--
+
+CREATE TABLE IF NOT EXISTS public."Coupon" (
+    coupon_id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    code text NOT NULL,
+    description text,
+    type public."Coupon_type_enum" NOT NULL,
+    value real NOT NULL,
+    min_order_total real NOT NULL DEFAULT 0,
+    max_discount real,
+    usage_limit integer,
+    times_used integer NOT NULL DEFAULT 0,
+    valid_from timestamptz,
+    valid_until timestamptz,
+    active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PK_Coupon" PRIMARY KEY (coupon_id),
+    CONSTRAINT "UQ_Coupon_code" UNIQUE (code)
+);
+
+--
+-- Order tracking timeline
+--
+
+CREATE TABLE IF NOT EXISTS public."OrderTracking" (
+    tracking_id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    order_id uuid NOT NULL,
+    status public."OrderTracking_status_enum" NOT NULL,
+    location text,
+    message text,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PK_OrderTracking" PRIMARY KEY (tracking_id),
+    CONSTRAINT "FK_OrderTracking_order" FOREIGN KEY (order_id) REFERENCES public."Order"(order_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "IDX_OrderTracking_order_id" ON public."OrderTracking" (order_id);
+
+--
+-- Product Q&A
+--
+
+CREATE TABLE IF NOT EXISTS public."ProductQuestion" (
+    question_id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    product_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    body text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PK_ProductQuestion" PRIMARY KEY (question_id),
+    CONSTRAINT "FK_ProductQuestion_product" FOREIGN KEY (product_id) REFERENCES public."Product"(product_id) ON DELETE CASCADE,
+    CONSTRAINT "FK_ProductQuestion_user" FOREIGN KEY (user_id) REFERENCES public."User"(user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "IDX_ProductQuestion_product_id" ON public."ProductQuestion" (product_id);
+
+CREATE TABLE IF NOT EXISTS public."ProductAnswer" (
+    answer_id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    question_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    body text NOT NULL,
+    is_staff boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PK_ProductAnswer" PRIMARY KEY (answer_id),
+    CONSTRAINT "FK_ProductAnswer_question" FOREIGN KEY (question_id) REFERENCES public."ProductQuestion"(question_id) ON DELETE CASCADE,
+    CONSTRAINT "FK_ProductAnswer_user" FOREIGN KEY (user_id) REFERENCES public."User"(user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "IDX_ProductAnswer_question_id" ON public."ProductAnswer" (question_id);
+
+--
+-- Recently viewed products
+--
+
+CREATE TABLE IF NOT EXISTS public."RecentlyViewed" (
+    user_id uuid NOT NULL,
+    product_id uuid NOT NULL,
+    viewed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PK_RecentlyViewed" PRIMARY KEY (user_id, product_id),
+    CONSTRAINT "FK_RecentlyViewed_user" FOREIGN KEY (user_id) REFERENCES public."User"(user_id) ON DELETE CASCADE,
+    CONSTRAINT "FK_RecentlyViewed_product" FOREIGN KEY (product_id) REFERENCES public."Product"(product_id) ON DELETE CASCADE
+);
+
+--
+-- User notification inbox
+--
+
+CREATE TABLE IF NOT EXISTS public."UserNotification" (
+    notification_id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
+    type public."UserNotification_type_enum" NOT NULL,
+    title text NOT NULL,
+    body text,
+    metadata text,
+    action_url text,
+    is_read boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PK_UserNotification" PRIMARY KEY (notification_id),
+    CONSTRAINT "FK_UserNotification_user" FOREIGN KEY (user_id) REFERENCES public."User"(user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "IDX_UserNotification_user_id" ON public."UserNotification" (user_id);
+CREATE INDEX IF NOT EXISTS "IDX_UserNotification_user_unread" ON public."UserNotification" (user_id, is_read);
+
+--
+-- Seed a few starter coupons so the UI has something to show out of the box.
+--
+
+INSERT INTO public."Coupon" (code, description, type, value, min_order_total, max_discount, active)
+VALUES
+    ('WELCOME10', 'Welcome discount – 10% off any order', 'percentage', 10, 0, 30, true),
+    ('SAVE5', '$5 off orders over $30', 'flat', 5, 30, NULL, true),
+    ('BIGSPENDER', '20% off orders over $200 (max $50)', 'percentage', 20, 200, 50, true)
+ON CONFLICT (code) DO NOTHING;
+
+--
 -- PostgreSQL database dump complete
 --
 

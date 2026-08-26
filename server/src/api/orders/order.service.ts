@@ -1,11 +1,13 @@
 import { OrderRepository } from '@/api/orders/order.repository';
-import { Order } from '@/shared/models/entities';
+import { Order, TrackingEventStatus } from '@/shared/models/entities';
 import { OrderProductLink, OrderUserLink } from '@/shared/models/relationships';
 import AppError from '@/shared/exceptions/app-error';
 import { OrderStatus } from '@/shared/types/enums/db.types';
 import { HttpStatusCode } from '@/shared/types/enums/httpcode.types';
 import { GetOrdersRequestProps } from '@/api/orders/order.types';
 import { GetOrdersResponseProps } from '@/api/orders/order.types';
+import { OrderTrackingService } from '@/api/order-tracking/order-tracking.service';
+import { CartRepository } from '@/api/carts/carts.repository';
 
 export class OrderService {
 	public static async getOrders({ user_id, limit, offset }: GetOrdersRequestProps): Promise<GetOrdersResponseProps> {
@@ -101,5 +103,46 @@ export class OrderService {
 				'updateProductsStock'
 			);
 		}
+	}
+
+	public static async getSingleOrder(order_id: string, user_id: string) {
+		const order = await OrderRepository.getSingleOrder(order_id, user_id);
+		if (!order) {
+			throw new AppError('Order not found', HttpStatusCode.NOT_FOUND, 'getSingleOrder');
+		}
+		return order;
+	}
+
+	// Deep chain: reordering copies every line item back into the user's cart
+	// (merging quantities with anything already there) so they can review before
+	// checking out again.
+	public static async reorderToCart(order_id: string, user_id: string) {
+		await this.ensureOrderBelongsToUser(order_id, user_id);
+		const items = await OrderRepository.getProductsForOrder(order_id);
+		for (const item of items) {
+			await CartRepository.addProductToCart(user_id, item.product_id, item.quantity);
+		}
+		return items;
+	}
+
+	public static async seedInitialTracking(order_id: string): Promise<void> {
+		await OrderTrackingService.addEvent({
+			order_id,
+			status: TrackingEventStatus.ORDER_PLACED,
+			message: 'Order received and awaiting processing.',
+		});
+		await OrderTrackingService.addEvent({
+			order_id,
+			status: TrackingEventStatus.PAYMENT_CONFIRMED,
+			message: 'Payment authorized.',
+		});
+	}
+
+	public static async recordCancellation(order_id: string): Promise<void> {
+		await OrderTrackingService.addEvent({
+			order_id,
+			status: TrackingEventStatus.CANCELLED,
+			message: 'Order was cancelled by the customer.',
+		});
 	}
 }

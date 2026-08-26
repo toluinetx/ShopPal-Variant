@@ -3,6 +3,7 @@ import { RatingBar } from '@/shared/components/RatingBar';
 import { formatCategoryName } from '@/pages/products/utils/ProductUtils';
 import { useNavigate } from 'react-router';
 import { useAddToCart } from '../hooks/useAddToCart.hook';
+import { WishlistButton } from '@/shared/components/WishlistButton';
 
 type ProductDetailsProps = {
     product: Product;
@@ -72,6 +73,7 @@ export const ProductDetails = ({
                 >
                     {isLoadingAddToCart ? 'Adding...' : 'Add to Cart'}
                 </button>
+                <WishlistButton productId={product_id} />
             </div>
         </div>
     );

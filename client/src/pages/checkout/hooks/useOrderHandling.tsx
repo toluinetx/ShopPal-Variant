@@ -5,7 +5,13 @@ import { validateShippingInfo, validatePaymentInfo } from '../validateForm';
 import { Address } from '@/shared/types';
 import { ProductDetails } from '../types/ProductDetails';
 
-export const useOrderHandlers = (itemsInCart: ProductDetails[], formData: any, setFormErrors: any) => {
+export const useOrderHandlers = (
+    itemsInCart: ProductDetails[],
+    formData: any,
+    setFormErrors: any,
+    couponCode?: string,
+    paymentMethodId?: string
+) => {
     const { auth } = useAuth();
     const api = useApi();
     const [showBillingInfo, setShowBillingInfo] = useState(false);
@@ -15,10 +21,14 @@ export const useOrderHandlers = (itemsInCart: ProductDetails[], formData: any, s
 
     const handleOrder = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const errors = validatePaymentInfo(formData);
-        if (Object.values(errors).some((error) => error !== '')) {
-            setFormErrors(errors);
-            return;
+        // Skip card-format validation when a saved payment method was selected —
+        // the "card number" field just displays a masked placeholder in that case.
+        if (!paymentMethodId) {
+            const errors = validatePaymentInfo(formData);
+            if (Object.values(errors).some((error) => error !== '')) {
+                setFormErrors(errors);
+                return;
+            }
         }
 
         setIsLoading(true);
@@ -44,12 +54,14 @@ export const useOrderHandlers = (itemsInCart: ProductDetails[], formData: any, s
             street: formData.street,
         };
 
-        let orderDetails = {
+        let orderDetails: any = {
             product_ids: productIds as string[],
             quantities: quantities as number[],
             billing_info: billingInfo,
             delivery_address: deliveryAddress as Address,
         };
+        if (couponCode) orderDetails.coupon_code = couponCode;
+        if (paymentMethodId) orderDetails.payment_method_id = paymentMethodId;
         let response;
 
         try {
