@@ -73,6 +73,9 @@ services:
       COOKIE_REFRESH_TOKEN_AGE: "${COOKIE_REFRESH_TOKEN_AGE:-604800000}"
       BCRYPT_HASH_LENGTH: "${BCRYPT_HASH_LENGTH:-10}"
       NOTIFICATIONS_URL: "http://notifications:8082"
+      # Product/avatar image uploads (S3) — mock example keys, replace in prod.
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-AKIAIOSFODNN7EXAMPLE}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY}"
     ports:
       - "${SERVER_PORT:-3000}:3000"
 
