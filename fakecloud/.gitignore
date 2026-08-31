@@ -1,0 +1,16 @@
+# Emulator runtime + venv
+.venv/
+.run/
+__pycache__/
+*.pyc
+
+# Terraform working files
+terraform/.terraform/
+# The lock file is intentionally not committed: it pins provider hashes per
+# platform, and one generated on Linux breaks `terraform init` on macOS.
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.*
+terraform/.build/
+terraform/*.tfvars
+!terraform/example.tfvars

@@ -92,6 +92,26 @@ ShopPal is a full-stack e-commerce web application developed as a final project 
 - [x] **Responsive Design**: ShopPal is designed to be responsive and accessible on all devices, including desktops, tablets, and smartphones.
 - [x] **Admin Panel**: A separate `admin` frontend lets store admins manage the catalog — creating products and updating price, stock, and other details — gated behind admin-only JWT authentication. See [ARCHITECTURE.md](./ARCHITECTURE.md).
 
+## ☁️ Simulated AWS environment (`fakecloud`)
+
+[`fakecloud/`](./fakecloud/) provisions a **simulated AWS account** with
+Terraform, modelling the infrastructure ShopPal would run on if it were
+deployed to AWS — EC2, S3, RDS Postgres, IAM, Lambda, SQS/SNS, ECR, KMS,
+Secrets Manager, CloudTrail and more. It exists as a target for cloud security
+scanners: real AWS API responses, a realistic asset graph, and 56 deliberate,
+documented misconfigurations to find.
+
+It runs entirely against a local emulator and **does not touch the deployment
+above** — no changes to `docker-compose.yml`, `k8s/`, or any service code.
+
+```bash
+cd fakecloud && ./fakecloud.sh up
+```
+
+See [`fakecloud/README.md`](./fakecloud/README.md) for details and
+[`fakecloud/EXPECTED_FINDINGS.md`](./fakecloud/EXPECTED_FINDINGS.md) for the
+answer key.
+
 ## 🙏 Acknowledgements <a name ="acknowledgements"></a>
 
 - [**Looka**](https://looka.com/) - For the logo design.
