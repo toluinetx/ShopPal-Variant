@@ -53,12 +53,35 @@ variable "bucket_suffix" {
 
 variable "ami_name_filter" {
   description = <<-EOT
-    Name pattern for the AMI the EC2 fleet boots from. The default resolves to
-    a 2017-vintage Amazon Linux image that ships in the emulator's catalogue,
-    which is deliberate: an end-of-life AMI is one of the findings.
+    Name pattern for the AMI most of the fleet boots from. Amazon Linux 2 by
+    default, which passed end-of-standard-support on 2025-06-30 - deliberate,
+    since an unsupported AMI is one of the seeded findings.
   EOT
   type        = string
-  default     = "amzn-ami-hvm-2017.09.1.20171103-x86_64-gp2"
+  default     = "amzn2-ami-minimal-hvm-*-x86_64-ebs"
+}
+
+variable "ami_name_filter_current" {
+  description = <<-EOT
+    Name pattern for a currently-supported AMI. Used only by the
+    correctly-configured `notifications` instance, so that "running an
+    end-of-life image" is a finding on six instances rather than all seven.
+  EOT
+  type        = string
+  default     = "al2023-ami-*-kernel-6.1-x86_64"
+}
+
+variable "enable_rds" {
+  description = <<-EOT
+    Create the two RDS Postgres instances. fakecloud backs RDS with *real*
+    Postgres containers, so this needs a working container runtime and access
+    to ghcr.io. Set false on a machine or CI runner where container registries
+    are unreachable - the rest of the estate (134 resources) still deploys, and
+    the DB hostname falls back to a realistic placeholder so every dependent
+    resource keeps its shape.
+  EOT
+  type        = bool
+  default     = true
 }
 
 variable "seed_bucket_objects" {

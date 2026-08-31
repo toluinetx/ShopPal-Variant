@@ -1,4 +1,6 @@
-# Emulator runtime + venv
+# Emulator binary + runtime + venv
+.bin/
+.cargo/
 .venv/
 .run/
 __pycache__/

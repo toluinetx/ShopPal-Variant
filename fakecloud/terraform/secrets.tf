@@ -108,7 +108,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
   secret_id = aws_secretsmanager_secret.db_credentials.id
   secret_string = jsonencode({
     engine   = "postgres"
-    host     = aws_db_instance.primary.address
+    host     = local.db_primary_address
     port     = 5432
     dbname   = "shoppal"
     username = local.db_master_username
@@ -188,7 +188,7 @@ resource "aws_ssm_parameter" "support_db_url_secure" {
   name   = "/${local.name}/support/DATABASE_URL"
   type   = "SecureString"
   key_id = aws_kms_key.app.key_id
-  value  = "postgres://${local.db_master_username}:${local.db_master_password}@${aws_db_instance.primary.address}:5432/shoppal?sslmode=require"
+  value  = "postgres://${local.db_master_username}:${local.db_master_password}@${local.db_primary_address}:5432/shoppal?sslmode=require"
 
   tags = { Expected = "true" }
 }

@@ -37,7 +37,7 @@ resource "aws_route53_record" "db_public_cname" {
   name    = "db.shoppal-demo.example.com"
   type    = "CNAME"
   ttl     = 300
-  records = [aws_db_instance.primary.address]
+  records = [local.db_primary_address]
 }
 
 # !! GAP: the bastion is named in public DNS as well, so "find the SSH box"

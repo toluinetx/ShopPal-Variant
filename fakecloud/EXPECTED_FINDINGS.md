@@ -92,7 +92,7 @@ cost money and widen the attack surface without appearing in any deployment.
 | 53 | Network ACL on the private subnets allows all traffic from `0.0.0.0/0` | `aws_network_acl.permissive` | `ec2:DescribeNetworkAcls` |
 | 54 | Public subnets set `map_public_ip_on_launch = true` | `aws_subnet.public` | `ec2:DescribeSubnets` |
 | 55 | Bastion advertised in public DNS | `aws_route53_record.bastion` | `route53:ListResourceRecordSets` |
-| 56 | Whole fleet boots a 2017 Amazon Linux AMI, years past end of life | `data.aws_ami.amazon_linux` | `ec2:DescribeInstances` + `DescribeImages` |
+| 56 | Six of seven instances boot Amazon Linux 2, past end-of-standard-support (2025-06-30); only `notifications` runs a current AL2023 image | `data.aws_ami.amazon_linux_2` | `ec2:DescribeInstances` + `DescribeImages` |
 
 ---
 
@@ -106,7 +106,7 @@ reports any of them is over-reporting.**
 |----------|---------------|
 | `aws_security_group.alb` | 80/443 from `0.0.0.0/0` is the entire purpose of a public ALB |
 | `aws_s3_bucket.user_avatars` | All four public-access blocks on, KMS-encrypted, versioned |
-| `aws_instance.fleet["notifications"]` | Private subnet, no public IP, encrypted root, IMDSv2 required |
+| `aws_instance.fleet["notifications"]` | Private subnet, no public IP, encrypted root, IMDSv2 required, and the only instance on a currently-supported AMI |
 | `aws_iam_policy.avatars_readwrite` | Scoped to one bucket and one prefix, with a `s3:prefix` condition |
 | `aws_iam_role.bastion` | Trust limited to `ec2.amazonaws.com`; inline policy is SSM session only |
 | `aws_ssm_parameter.support_db_url_secure` | `SecureString` encrypted with a CMK |
@@ -135,3 +135,17 @@ aws --endpoint-url http://127.0.0.1:4566 ec2 describe-instances \
 Every resource also carries `Simulation = "true"` and
 `Fakecloud = "shoppal-fakecloud"`, so nothing here can be confused with a real
 asset.
+
+---
+
+## A note on the RDS instances
+
+fakecloud backs RDS with **real Postgres containers**, so findings 1, 11 and 12
+are not just metadata assertions — `shoppal-prod-postgres` is a database that
+actually exists and accepts connections. A scanner that goes past
+`DescribeDBInstances` and probes the endpoint will find something there.
+
+If you deployed with `-var 'enable_rds=false'` (no container runtime), findings
+1, 11, 12, 13, 43 and 44 are absent, and the DB hostname everything else refers
+to is a placeholder. All other findings, including the leaked credentials that
+point *at* that hostname, are unaffected.

@@ -61,6 +61,8 @@ locals {
 }
 
 resource "aws_db_instance" "primary" {
+  count = var.enable_rds ? 1 : 0
+
   identifier     = "${local.name}-postgres"
   engine         = "postgres"
   engine_version = "16.3"
@@ -121,6 +123,8 @@ resource "aws_db_instance" "primary" {
 # primary - encrypted and private - but still missing deletion protection, so
 # it exercises "partially compliant" rather than "clean" or "terrible".
 resource "aws_db_instance" "reporting" {
+  count = var.enable_rds ? 1 : 0
+
   identifier     = "${local.name}-postgres-reporting"
   engine         = "postgres"
   engine_version = "16.3"
@@ -156,4 +160,15 @@ resource "aws_db_instance" "reporting" {
     Insecure    = "no-deletion-protection"
     Description = "Read-only reporting replica for the analytics team"
   }
+}
+
+# Everything that embeds the database hostname - user_data, Secrets Manager,
+# SSM, the Lambda environment, the public DNS record - goes through these, so
+# the estate keeps its shape when var.enable_rds is false.
+locals {
+  db_primary_address = var.enable_rds ? aws_db_instance.primary[0].address : "${local.name}-postgres.abcdefghijkl.${var.region}.rds.amazonaws.com"
+
+  db_primary_endpoint = var.enable_rds ? aws_db_instance.primary[0].endpoint : "${local.db_primary_address}:5432"
+
+  db_reporting_endpoint = var.enable_rds ? aws_db_instance.reporting[0].endpoint : "${local.name}-postgres-reporting.abcdefghijkl.${var.region}.rds.amazonaws.com:5432"
 }

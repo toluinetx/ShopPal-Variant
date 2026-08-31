@@ -95,11 +95,12 @@ ShopPal is a full-stack e-commerce web application developed as a final project 
 ## ☁️ Simulated AWS environment (`fakecloud`)
 
 [`fakecloud/`](./fakecloud/) provisions a **simulated AWS account** with
-Terraform, modelling the infrastructure ShopPal would run on if it were
-deployed to AWS — EC2, S3, RDS Postgres, IAM, Lambda, SQS/SNS, ECR, KMS,
-Secrets Manager, CloudTrail and more. It exists as a target for cloud security
-scanners: real AWS API responses, a realistic asset graph, and 56 deliberate,
-documented misconfigurations to find.
+Terraform, on top of [fakecloud](https://github.com/faiscadev/fakecloud),
+modelling the infrastructure ShopPal would run on if it were deployed to AWS —
+EC2, S3, RDS Postgres, IAM, Lambda, SQS/SNS, ECR, KMS, Secrets Manager,
+CloudTrail and more. It exists as a target for cloud security scanners: real
+AWS API responses, a realistic asset graph, and 56 deliberate, documented
+misconfigurations to find.
 
 It runs entirely against a local emulator and **does not touch the deployment
 above** — no changes to `docker-compose.yml`, `k8s/`, or any service code.

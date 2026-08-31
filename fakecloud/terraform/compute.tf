@@ -6,16 +6,28 @@
 # "instance running an end-of-life image" is itself a finding.
 # ---------------------------------------------------------------------------
 
-# !! GAP: the fleet is pinned to a 2017 Amazon Linux image. It is years past
-# end-of-life and misses every kernel and OpenSSL fix since - "instance running
-# an unsupported AMI" is a finding in its own right.
-data "aws_ami" "amazon_linux" {
+# !! GAP: the fleet boots Amazon Linux 2, which passed end-of-standard-support
+# on 2025-06-30. "Instance running an unsupported AMI" is a finding in its own
+# right, and it applies to six of the seven instances.
+data "aws_ami" "amazon_linux_2" {
   owners      = ["137112412989"] # amazon
   most_recent = true
 
   filter {
     name   = "name"
     values = [var.ami_name_filter]
+  }
+}
+
+# The current, supported image. Only the correctly-configured `notifications`
+# instance uses it - so a scanner should report six EOL instances, not seven.
+data "aws_ami" "amazon_linux_2023" {
+  owners      = ["137112412989"] # amazon
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = [var.ami_name_filter_current]
   }
 }
 
@@ -51,7 +63,7 @@ locals {
 
     cat >/etc/shoppal/server.env <<'ENV'
     NODE_ENV=production
-    DB_CONNECTION_URL=postgres://${local.db_master_username}:${local.db_master_password}@${aws_db_instance.primary.address}:5432/shoppal
+    DB_CONNECTION_URL=postgres://${local.db_master_username}:${local.db_master_password}@${local.db_primary_address}:5432/shoppal
     JWT_SECRET=b7f3c1d9e2a84f60b5c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3
     AWS_ACCESS_KEY_ID=${aws_iam_access_key.app_service_account.id}
     AWS_SECRET_ACCESS_KEY=${aws_iam_access_key.app_service_account.secret}
@@ -72,6 +84,7 @@ locals {
       imdsv2        = true
       user_data     = null
       insecure      = ""
+      ami           = data.aws_ami.amazon_linux_2.id
     }
 
     admin = {
@@ -84,6 +97,7 @@ locals {
       imdsv2        = true
       user_data     = null
       insecure      = ""
+      ami           = data.aws_ami.amazon_linux_2.id
     }
 
     # !! GAP: the core API sits in a *public* subnet with a public IP, runs on
@@ -99,6 +113,7 @@ locals {
       imdsv2        = false
       user_data     = local.app_user_data
       insecure      = "public-ip,unencrypted-root,imdsv1-enabled,secrets-in-user-data"
+      ami           = data.aws_ami.amazon_linux_2.id
     }
 
     support = {
@@ -111,6 +126,7 @@ locals {
       imdsv2        = false
       user_data     = null
       insecure      = "unencrypted-root,imdsv1-enabled"
+      ami           = data.aws_ami.amazon_linux_2.id
     }
 
     # The one that's done right: private subnet, encrypted volume, IMDSv2
@@ -125,6 +141,7 @@ locals {
       imdsv2        = true
       user_data     = null
       insecure      = ""
+      ami           = data.aws_ami.amazon_linux_2023.id
     }
   }
 }
@@ -132,7 +149,7 @@ locals {
 resource "aws_instance" "fleet" {
   for_each = local.instances
 
-  ami           = data.aws_ami.amazon_linux.id
+  ami           = each.value.ami
   instance_type = each.value.instance_type
   subnet_id     = each.value.subnet
   key_name      = aws_key_pair.ops.key_name
@@ -169,7 +186,7 @@ resource "aws_instance" "fleet" {
 
 # !! GAP: SSH-from-anywhere bastion with an unencrypted root volume.
 resource "aws_instance" "bastion" {
-  ami           = data.aws_ami.amazon_linux.id
+  ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.micro"
   subnet_id     = aws_subnet.public["a"].id
   key_name      = aws_key_pair.ops.key_name
@@ -200,8 +217,8 @@ resource "aws_instance" "bastion" {
 # !! GAP: the worst box in the estate. Every port open to the internet, admin
 # instance profile, IMDSv1, unencrypted, and nobody remembers it exists.
 resource "aws_instance" "legacy_migration" {
-  ami           = data.aws_ami.amazon_linux.id
-  instance_type = "t2.medium"
+  ami           = data.aws_ami.amazon_linux_2.id
+  instance_type = "t3.medium"
   subnet_id     = aws_subnet.public["b"].id
   key_name      = aws_key_pair.ops.key_name
 

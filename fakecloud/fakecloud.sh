@@ -8,17 +8,21 @@
 #   ./fakecloud.sh env       print the env vars to point a scanner at it
 #   ./fakecloud.sh status    is the emulator up, and what's deployed
 #   ./fakecloud.sh destroy   terraform destroy, leave the emulator running
-#   ./fakecloud.sh down      stop the emulator (state is in-memory, so this
-#                            discards the whole estate)
-#   ./fakecloud.sh reset     wipe emulator state and re-apply from scratch
+#   ./fakecloud.sh down      stop the emulator (state is in-memory by default,
+#                            so this discards the whole estate)
+#   ./fakecloud.sh reset     tear down and rebuild from scratch
+#
+# The AWS API is emulated by fakecloud (https://github.com/faiscadev/fakecloud),
+# a single-binary open-source AWS emulator, listening on port 4566.
 #
 # Nothing here touches the real ShopPal deployment (docker-compose.yml, k8s/)
-# and nothing here can reach real AWS - see the guard in terraform/providers.tf.
+# and nothing here can reach real AWS - see the guard in terraform/variables.tf.
 
 set -euo pipefail
 
 FAKECLOUD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TF_DIR="$FAKECLOUD_DIR/terraform"
+BIN_DIR="$FAKECLOUD_DIR/.bin"
 VENV_DIR="${FAKECLOUD_VENV:-$FAKECLOUD_DIR/.venv}"
 STATE_DIR="$FAKECLOUD_DIR/.run"
 PID_FILE="$STATE_DIR/emulator.pid"
@@ -29,7 +33,14 @@ PORT="${FAKECLOUD_PORT:-4566}"
 ENDPOINT="http://${HOST}:${PORT}"
 REGION="${FAKECLOUD_REGION:-us-east-1}"
 
-# Dummy credentials. The emulator accepts anything.
+# Optional hardening, passed straight through to the emulator:
+#   FAKECLOUD_IAM=soft|strict   evaluate IAM policies on every call
+#   FAKECLOUD_SIGV4=1           verify request signatures
+IAM_MODE="${FAKECLOUD_IAM:-}"
+VERIFY_SIGV4="${FAKECLOUD_SIGV4:-}"
+
+# Dummy credentials. The emulator accepts anything unless SigV4 verification
+# is turned on.
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}"
 export AWS_DEFAULT_REGION="$REGION"
@@ -47,10 +58,8 @@ warn() { printf '%s warn%s %s\n' "$YELLOW" "$NC" "$*"; }
 die()  { printf '%serror%s %s\n' "$RED" "$NC" "$*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
-
-need_python() {
-    command -v python3 >/dev/null 2>&1 || die "python3 is required but not on PATH"
-}
+# Dependencies
+# ---------------------------------------------------------------------------
 
 need_terraform() {
     if command -v terraform >/dev/null 2>&1; then
@@ -58,27 +67,80 @@ need_terraform() {
     elif command -v tofu >/dev/null 2>&1; then
         TF_BIN=tofu
     else
-        die "terraform (or tofu) is required but not on PATH - https://developer.hashicorp.com/terraform/install"
+        die "terraform (or tofu) is required - https://developer.hashicorp.com/terraform/install"
     fi
 }
 
-ensure_venv() {
-    need_python
-    if [ ! -x "$VENV_DIR/bin/python" ]; then
-        log "creating virtualenv at $VENV_DIR"
-        python3 -m venv "$VENV_DIR"
-        "$VENV_DIR/bin/pip" install --quiet --upgrade pip
+# Locate the fakecloud binary, installing it if we can. Honour FAKECLOUD_BIN
+# so you can point at a build of your own.
+ensure_fakecloud() {
+    if [ -n "${FAKECLOUD_BIN:-}" ]; then
+        [ -x "$FAKECLOUD_BIN" ] || die "FAKECLOUD_BIN=$FAKECLOUD_BIN is not executable"
+        FC_BIN="$FAKECLOUD_BIN"; return
     fi
-    if ! "$VENV_DIR/bin/python" -c "import moto" >/dev/null 2>&1; then
-        log "installing moto[server] + awscli (one-off, a few hundred MB)"
-        "$VENV_DIR/bin/pip" install --quiet "moto[server]>=5.0" awscli
+    if command -v fakecloud >/dev/null 2>&1; then
+        FC_BIN="$(command -v fakecloud)"; return
     fi
-    PY="$VENV_DIR/bin/python"
+    if [ -x "$BIN_DIR/fakecloud" ]; then
+        FC_BIN="$BIN_DIR/fakecloud"; return
+    fi
+
+    log "fakecloud not found - installing"
+    mkdir -p "$BIN_DIR"
+
+    # The upstream installer, pointed at our own bin dir.
+    if curl -fsSL --max-time 120 https://fakecloud.dev/install.sh 2>/dev/null \
+        | FAKECLOUD_INSTALL_DIR="$BIN_DIR" INSTALL_DIR="$BIN_DIR" PREFIX="$BIN_DIR" bash >/dev/null 2>&1 \
+        && [ -x "$BIN_DIR/fakecloud" ]; then
+        FC_BIN="$BIN_DIR/fakecloud"; ok "installed via fakecloud.dev/install.sh"; return
+    fi
+    if command -v fakecloud >/dev/null 2>&1; then
+        FC_BIN="$(command -v fakecloud)"; ok "installed via fakecloud.dev/install.sh"; return
+    fi
+
+    if command -v brew >/dev/null 2>&1 && brew install fakecloud >/dev/null 2>&1 \
+        && command -v fakecloud >/dev/null 2>&1; then
+        FC_BIN="$(command -v fakecloud)"; ok "installed via Homebrew"; return
+    fi
+
+    if command -v cargo >/dev/null 2>&1; then
+        log "building from source with cargo (this takes a while)"
+        if cargo install fakecloud --root "$FAKECLOUD_DIR/.cargo" >/dev/null 2>&1 \
+            && [ -x "$FAKECLOUD_DIR/.cargo/bin/fakecloud" ]; then
+            FC_BIN="$FAKECLOUD_DIR/.cargo/bin/fakecloud"; ok "installed via cargo"; return
+        fi
+    fi
+
+    die "could not install fakecloud automatically. Install it yourself and re-run:
+    curl -fsSL https://fakecloud.dev/install.sh | bash
+    brew install fakecloud
+    cargo install fakecloud
+    docker run -p 4566:4566 ghcr.io/faiscadev/fakecloud
+  Then set FAKECLOUD_BIN=/path/to/fakecloud, or put it on PATH."
+}
+
+# The AWS CLI is only needed by `verify` and `status`. Prefer a system one.
+ensure_awscli() {
+    if command -v aws >/dev/null 2>&1; then
+        AWSCLI="$(command -v aws)"; return
+    fi
+    if [ -x "$VENV_DIR/bin/aws" ]; then
+        AWSCLI="$VENV_DIR/bin/aws"; return
+    fi
+    command -v python3 >/dev/null 2>&1 || die "need either the AWS CLI or python3 on PATH"
+    log "installing the AWS CLI into $VENV_DIR (used only by verify/status)"
+    python3 -m venv "$VENV_DIR"
+    "$VENV_DIR/bin/pip" install --quiet --upgrade pip
+    "$VENV_DIR/bin/pip" install --quiet awscli
     AWSCLI="$VENV_DIR/bin/aws"
 }
 
+# ---------------------------------------------------------------------------
+# Emulator lifecycle
+# ---------------------------------------------------------------------------
+
 emulator_healthy() {
-    curl -sf -o /dev/null --max-time 3 "$ENDPOINT/moto-api/" 2>/dev/null
+    curl -sf -o /dev/null --max-time 3 "$ENDPOINT/_fakecloud/health" 2>/dev/null
 }
 
 emulator_running() {
@@ -86,7 +148,6 @@ emulator_running() {
 }
 
 start_emulator() {
-    ensure_venv
     mkdir -p "$STATE_DIR"
 
     if emulator_healthy; then
@@ -94,14 +155,24 @@ start_emulator() {
         return 0
     fi
 
-    log "starting AWS API emulator on $ENDPOINT"
-    setsid nohup "$PY" "$FAKECLOUD_DIR/scripts/fakecloud_server.py" \
-        -H "$HOST" -p "$PORT" > "$LOG_FILE" 2>&1 < /dev/null &
+    ensure_fakecloud
+
+    local args=()
+    [ -n "$IAM_MODE" ] && args+=(--iam "$IAM_MODE")
+    [ -n "$VERIFY_SIGV4" ] && args+=(--verify-sigv4)
+
+    log "starting fakecloud on $ENDPOINT${IAM_MODE:+ (IAM enforcement: $IAM_MODE)}"
+    FAKECLOUD_PORT="$PORT" FAKECLOUD_REGION="$REGION" \
+        setsid nohup "$FC_BIN" "${args[@]}" > "$LOG_FILE" 2>&1 < /dev/null &
     echo $! > "$PID_FILE"
 
-    for _ in $(seq 1 40); do
+    for _ in $(seq 1 60); do
         if emulator_healthy; then
             ok "emulator up (pid $(cat "$PID_FILE")), logs at $LOG_FILE"
+            if grep -q "No container runtime" "$LOG_FILE" 2>/dev/null; then
+                warn "no container runtime detected - RDS will fail. Start Docker,"
+                warn "or run with -var 'enable_rds=false' (see README)."
+            fi
             return 0
         fi
         sleep 0.5
@@ -124,6 +195,14 @@ stop_emulator() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# Terraform
+# ---------------------------------------------------------------------------
+
+tf_vars() {
+    printf '%s' "-var fakecloud_endpoint=$ENDPOINT -var region=$REGION"
+}
+
 terraform_apply() {
     need_terraform
     emulator_healthy || die "emulator is not reachable at $ENDPOINT - run './fakecloud.sh up' first"
@@ -131,10 +210,9 @@ terraform_apply() {
     log "terraform init"
     (cd "$TF_DIR" && $TF_BIN init -input=false -no-color >/dev/null)
 
-    log "terraform apply (136 resources; the two RDS instances take ~90s)"
-    (cd "$TF_DIR" && $TF_BIN apply -auto-approve -input=false -no-color \
-        -var "fakecloud_endpoint=$ENDPOINT" \
-        -var "region=$REGION")
+    log "terraform apply"
+    # shellcheck disable=SC2046
+    (cd "$TF_DIR" && $TF_BIN apply -auto-approve -input=false -no-color $(tf_vars) "$@")
     ok "estate deployed"
 }
 
@@ -145,9 +223,8 @@ terraform_destroy() {
         return 0
     fi
     log "terraform destroy"
-    (cd "$TF_DIR" && $TF_BIN destroy -auto-approve -input=false -no-color \
-        -var "fakecloud_endpoint=$ENDPOINT" \
-        -var "region=$REGION")
+    # shellcheck disable=SC2046
+    (cd "$TF_DIR" && $TF_BIN destroy -auto-approve -input=false -no-color $(tf_vars) "$@")
     ok "estate destroyed"
 }
 
@@ -170,7 +247,7 @@ EOF
 
 cmd_up() {
     start_emulator
-    terraform_apply
+    terraform_apply "$@"
     echo
     printf '%sFakecloud is live.%s\n\n' "$BOLD" "$NC"
     print_env
@@ -180,49 +257,50 @@ cmd_up() {
 
 cmd_status() {
     if emulator_healthy; then
-        ok "emulator healthy at $ENDPOINT"
+        ok "emulator healthy at $ENDPOINT (fakecloud $(curl -sf "$ENDPOINT/_fakecloud/health" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'))"
     else
         warn "emulator not reachable at $ENDPOINT"
         return 0
     fi
-    ensure_venv
+    ensure_awscli
+    a() { "$AWSCLI" --endpoint-url "$ENDPOINT" "$@" 2>/dev/null || echo '?'; }
     printf '\n%sDeployed inventory%s\n' "$BOLD" "$NC"
     # Terminated instances linger in DescribeInstances (real AWS does this too),
     # so filter them out - the count should reflect live assets.
-    printf '  ec2 instances    %s\n' "$($AWSCLI --endpoint-url "$ENDPOINT" ec2 describe-instances --filters 'Name=instance-state-name,Values=pending,running,stopping,stopped' --query 'length(Reservations[].Instances[])' --output text 2>/dev/null || echo '?')"
-    printf '  s3 buckets       %s\n' "$($AWSCLI --endpoint-url "$ENDPOINT" s3api list-buckets --query 'length(Buckets)' --output text 2>/dev/null || echo '?')"
-    printf '  rds instances    %s\n' "$($AWSCLI --endpoint-url "$ENDPOINT" rds describe-db-instances --query 'length(DBInstances)' --output text 2>/dev/null || echo '?')"
-    printf '  security groups  %s\n' "$($AWSCLI --endpoint-url "$ENDPOINT" ec2 describe-security-groups --query 'length(SecurityGroups)' --output text 2>/dev/null || echo '?')"
-    printf '  iam users        %s\n' "$($AWSCLI --endpoint-url "$ENDPOINT" iam list-users --query 'length(Users)' --output text 2>/dev/null || echo '?')"
-    printf '  iam roles        %s\n' "$($AWSCLI --endpoint-url "$ENDPOINT" iam list-roles --query 'length(Roles)' --output text 2>/dev/null || echo '?')"
-    printf '  lambda functions %s\n' "$($AWSCLI --endpoint-url "$ENDPOINT" lambda list-functions --query 'length(Functions)' --output text 2>/dev/null || echo '?')"
-    printf '  secrets          %s\n' "$($AWSCLI --endpoint-url "$ENDPOINT" secretsmanager list-secrets --query 'length(SecretList)' --output text 2>/dev/null || echo '?')"
+    printf '  ec2 instances    %s\n' "$(a ec2 describe-instances --filters 'Name=instance-state-name,Values=pending,running,stopping,stopped' --query 'length(Reservations[].Instances[])' --output text)"
+    printf '  s3 buckets       %s\n' "$(a s3api list-buckets --query 'length(Buckets)' --output text)"
+    printf '  rds instances    %s\n' "$(a rds describe-db-instances --query 'length(DBInstances)' --output text)"
+    printf '  security groups  %s\n' "$(a ec2 describe-security-groups --query 'length(SecurityGroups)' --output text)"
+    printf '  iam users        %s\n' "$(a iam list-users --query 'length(Users)' --output text)"
+    printf '  iam roles        %s\n' "$(a iam list-roles --query 'length(Roles)' --output text)"
+    printf '  lambda functions %s\n' "$(a lambda list-functions --query 'length(Functions)' --output text)"
+    printf '  secrets          %s\n' "$(a secretsmanager list-secrets --query 'length(SecretList)' --output text)"
 }
 
 cmd_verify() {
-    ensure_venv
+    ensure_awscli
     emulator_healthy || die "emulator is not reachable at $ENDPOINT"
     FAKECLOUD_ENDPOINT="$ENDPOINT" AWSCLI="$AWSCLI" \
         bash "$FAKECLOUD_DIR/scripts/verify.sh"
 }
 
 cmd_reset() {
-    emulator_healthy || die "emulator is not reachable at $ENDPOINT"
-    log "wiping emulator state"
-    curl -sf -X POST "$ENDPOINT/moto-api/reset" >/dev/null
+    terraform_destroy || true
+    stop_emulator || true
     rm -f "$TF_DIR/terraform.tfstate" "$TF_DIR/terraform.tfstate.backup"
-    ok "state wiped"
-    terraform_apply
+    start_emulator
+    terraform_apply "$@"
 }
 
-case "${1:-up}" in
-    up)      cmd_up ;;
-    apply)   terraform_apply ;;
+CMD="${1:-up}"; shift || true
+case "$CMD" in
+    up)      cmd_up "$@" ;;
+    apply)   terraform_apply "$@" ;;
     verify)  cmd_verify ;;
     env)     print_env ;;
     status)  cmd_status ;;
-    destroy) terraform_destroy ;;
+    destroy) terraform_destroy "$@" ;;
     down)    stop_emulator ;;
-    reset)   cmd_reset ;;
-    *)       sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ; exit 1 ;;
+    reset)   cmd_reset "$@" ;;
+    *)       sed -n '3,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ; exit 1 ;;
 esac

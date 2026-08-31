@@ -35,8 +35,8 @@ output "instance_ids" {
 output "rds_endpoints" {
   description = "Postgres endpoints. Metadata only - see README, nothing listens here."
   value = {
-    primary   = aws_db_instance.primary.endpoint
-    reporting = aws_db_instance.reporting.endpoint
+    primary   = local.db_primary_endpoint
+    reporting = local.db_reporting_endpoint
   }
 }
 
@@ -71,7 +71,7 @@ output "summary" {
   value = {
     ec2_instances    = length(aws_instance.fleet) + 2
     s3_buckets       = length(local.bucket_names)
-    rds_instances    = 2
+    rds_instances    = var.enable_rds ? 2 : 0
     security_groups  = 5
     iam_users        = 3
     iam_roles        = 4

@@ -29,7 +29,7 @@ resource "aws_lambda_function" "thumbnailer" {
   environment {
     variables = {
       IMAGE_BUCKET          = aws_s3_bucket.product_images.id
-      DB_CONNECTION_URL     = "postgres://${local.db_master_username}:${local.db_master_password}@${aws_db_instance.primary.address}:5432/shoppal"
+      DB_CONNECTION_URL     = "postgres://${local.db_master_username}:${local.db_master_password}@${local.db_primary_address}:5432/shoppal"
       JWT_SECRET            = "b7f3c1d9e2a84f60b5c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3"
       AWS_UPLOAD_KEY_ID     = aws_iam_access_key.app_service_account.id
       AWS_UPLOAD_KEY_SECRET = aws_iam_access_key.app_service_account.secret

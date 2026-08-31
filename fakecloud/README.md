@@ -1,6 +1,7 @@
 # ShopPal fakecloud
 
-A simulated AWS account, provisioned with Terraform, modelling the
+A simulated AWS account, provisioned with Terraform on top of
+[**fakecloud**](https://github.com/faiscadev/fakecloud), modelling the
 infrastructure ShopPal would run on if it were deployed to AWS instead of
 Docker Compose. It exists to give a cloud security scanner something to
 traverse: real AWS API responses, a realistic asset graph, and 56 deliberate,
@@ -11,10 +12,10 @@ documented security gaps to find.
 runs beside them as a separate, self-contained thing you start and stop on its
 own.
 
-**It cannot reach real AWS.** Every AWS API call is redirected to a local
-emulator, and the `fakecloud_endpoint` variable is validated to be a loopback
-or RFC1918 address — anything else fails the plan before the AWS provider is
-even configured.
+**It cannot reach real AWS.** Every AWS API call is redirected to the local
+fakecloud emulator, and the `fakecloud_endpoint` variable is validated to be a
+loopback or RFC1918 address — anything else fails the plan before the AWS
+provider is even configured.
 
 ---
 
@@ -27,11 +28,12 @@ cd fakecloud
 
 That will:
 
-1. create a Python virtualenv in `fakecloud/.venv` and install the emulator
-   (a one-off download of a few hundred MB),
-2. start the AWS API emulator on `http://127.0.0.1:4566`,
-3. `terraform apply` the estate — 136 resources, about two minutes, most of it
-   waiting on the two RDS instances to report `available`.
+1. install the `fakecloud` binary if it isn't already on your PATH (~19 MB;
+   via `fakecloud.dev/install.sh`, Homebrew, or `cargo` — or set
+   `FAKECLOUD_BIN` to point at your own build),
+2. start it on `http://127.0.0.1:4566`,
+3. `terraform apply` the estate — 136 resources, a couple of minutes, most of
+   it waiting on the two RDS instances to come up.
 
 Then point your scanner at it:
 
@@ -58,8 +60,12 @@ emulator accepts any key and reports account `123456789012`.
 | `./fakecloud.sh destroy` | `terraform destroy`, emulator stays up |
 | `./fakecloud.sh down` | Stop the emulator (state is in-memory, so this discards everything) |
 
-**Requirements:** `python3` (3.9+), `terraform` (or `tofu`) 1.5+, `curl`. No
-Docker needed.
+**Requirements:** `terraform` (or `tofu`) 1.5+ and `curl`. Docker or Podman is
+needed for the RDS and EC2 *data planes* — fakecloud backs those with real
+containers. Without a container runtime the estate still deploys, but RDS has
+to be switched off (see [Running without a container runtime](#running-without-a-container-runtime)).
+The AWS CLI is used only by `verify` and `status`; a system `aws` is used if
+present, otherwise a small virtualenv is created for it.
 
 ---
 
@@ -153,52 +159,72 @@ intact before you blame your scanner.
 
 | Piece | Choice |
 |-------|--------|
-| AWS API | [moto](https://github.com/getmoto/moto) in standalone server mode, on port 4566 |
+| AWS API | [fakecloud](https://github.com/faiscadev/fakecloud) — a single-binary, AGPL-3.0 AWS emulator, on port 4566 |
 | Provisioning | Terraform with `hashicorp/aws ~> 5.100`, every service endpoint overridden |
-| State | In-memory in the emulator; Terraform state is a local file in `terraform/` |
+| State | In-memory in the emulator by default; Terraform state is a local file in `terraform/` |
 
-Port 4566 is LocalStack's conventional port, so tools that already expect a
-local AWS endpoint work unchanged.
+Port 4566 is the conventional local-AWS port, so tools that already expect one
+work unchanged.
 
-moto was chosen over LocalStack for one decisive reason: **RDS is a LocalStack
-Pro feature**, and a database is central to what this estate needs to model.
-moto covers RDS, ELBv2, CloudTrail and ECR in its open-source build, so the
-whole estate comes up with no licence key. If you'd rather use LocalStack, the
-Terraform is portable — point `fakecloud_endpoint` at it and drop
-`database.tf`, `logging.tf` and the ELB resources in `compute.tf`.
+fakecloud matters here for two reasons beyond "it emulates AWS":
 
-### The one emulator patch
+- **RDS is backed by a real Postgres container**, not a metadata stub. The
+  `shoppal-prod-postgres` instance is an actual database you can connect to, so
+  a scanner that goes past `DescribeDBInstances` and tries the endpoint finds
+  something listening. EC2, Lambda, ECS and ElastiCache work the same way.
+- **IAM policy evaluation is available**, which most emulators don't do at all
+  — see below.
 
-`scripts/moto_patches.py` monkey-patches a single moto bug before the server
-starts. moto (through 5.2.x) assigns every RDS instance the *same*
-`DbiResourceId`:
+### Optional: make the estate enforce IAM
 
-```python
-# moto/rds/models.py
-self.dbi_resource_id = "db-M5ENSHXFPU6XHZ4G4ZEI5QIO2U"
+By default every call is allowed, so scanners just work. fakecloud can also
+evaluate the IAM policies this estate defines:
+
+```bash
+FAKECLOUD_IAM=soft   ./fakecloud.sh up    # log policy decisions, allow anyway
+FAKECLOUD_IAM=strict ./fakecloud.sh up    # actually deny what policy denies
+FAKECLOUD_SIGV4=1    ./fakecloud.sh up    # verify request signatures too
 ```
 
-The Terraform AWS provider uses `DbiResourceId` as the resource's Terraform ID
-and reads the instance back through a `dbi-resource-id` filter. With a shared
-value that filter matches every instance at once, the provider can't resolve
-one, and the post-create read fails with `couldn't find resource` — so any
-config with more than one `aws_db_instance` cannot apply. The patch assigns a
-unique, correctly-shaped ID per instance, which is what real RDS does. If moto
-fixes this upstream, deleting that function is the whole migration.
+`strict` turns the estate into a much harder target: a scanner using the
+`shoppal-prod-contractor-dana` key really is limited to what
+`shoppal-prod-read-secrets` grants, so you can test whether it degrades
+gracefully on `AccessDenied` instead of assuming admin. `terraform apply`
+itself is easiest with enforcement off — bring it up first, then restart the
+emulator with `FAKECLOUD_IAM=strict` and re-run `apply` if you want the estate
+rebuilt under enforcement.
+
+### Running without a container runtime
+
+RDS needs Docker or Podman *and* reachable container registries, since
+fakecloud pulls a real Postgres image. Where that isn't available — a locked-
+down CI runner, an air-gapped box — deploy the other 134 resources with:
+
+```bash
+./fakecloud.sh up -var 'enable_rds=false'
+```
+
+The DB hostname then falls back to a realistic placeholder, so `user_data`, the
+Secrets Manager entry, the SSM parameters, the Lambda environment and the
+public DNS record all keep their shape and their findings. EC2 degrades on its
+own without any flag: instances become metadata-only, which is all the estate
+needs them to be.
 
 ### Limitations
 
-- **RDS is metadata only.** `rds:DescribeDBInstances` returns a complete,
-  accurate instance description, but nothing listens on the endpoint — there's
-  no Postgres process behind it. That's the right trade-off here: a scanner
-  traversing the account reads the *control plane*, and the control plane is
-  faithful. If you need a live Postgres to point at, the existing
-  `docker-compose.yml` already runs one on `localhost:5432`.
-- **EC2 instances don't boot.** They're API objects: describable, tagged, with
-  readable `user_data` and metadata options, but no guest OS. Anything that
-  tries to SSH in or scan a port will find nothing listening.
-- **State is in-memory.** `./fakecloud.sh down` discards the estate. Use
-  `destroy` if you want to keep the emulator up between runs.
+- **EC2 instances are containers, not VMs.** fakecloud runs them as real
+  containers, so they're describable, tagged, with readable `user_data` and
+  metadata options — but they aren't the AMI they claim to be, and without a
+  container runtime they fall back to metadata-only. Port-scanning them is not
+  what this estate is for.
+- **State is in-memory by default.** `./fakecloud.sh down` discards the estate.
+  Use `destroy` if you want to keep the emulator up between runs. fakecloud
+  supports `--storage-mode=persistent --data-path=DIR` if you want it to
+  survive a restart.
+- **The estate is a fixture, not a running app.** The RDS instance is a real
+  Postgres, but it holds no ShopPal schema — the seeded `pg_dump` in the
+  backups bucket is a fixture file, not a dump of it. If you want the live
+  application database, `docker-compose.yml` still runs one on `localhost:5432`.
 
 None of these limits what the fakecloud is for. Asset discovery and
 configuration analysis run entirely against the AWS API, and that surface is
@@ -242,11 +268,9 @@ Use `./fakecloud.sh`, which sets the endpoint for you.
 
 ```
 fakecloud/
-├── fakecloud.sh              driver: up / verify / destroy / down
+├── fakecloud.sh              driver: installs fakecloud, up / verify / destroy
 ├── EXPECTED_FINDINGS.md      the answer key — all 56 findings
 ├── scripts/
-│   ├── fakecloud_server.py   emulator entry point (applies patches first)
-│   ├── moto_patches.py       the RDS DbiResourceId shim
 │   └── verify.sh             API-only asset walk
 └── terraform/
     ├── versions.tf           provider pinning
@@ -278,6 +302,12 @@ terraform apply -var 'seed_bucket_objects=false'
 
 # different port
 FAKECLOUD_PORT=4599 ./fakecloud.sh up
+
+# skip RDS where container registries are unreachable
+./fakecloud.sh up -var 'enable_rds=false'
+
+# use your own fakecloud build instead of the installed one
+FAKECLOUD_BIN=/path/to/fakecloud ./fakecloud.sh up
 ```
 
 `terraform output seeded_access_key_ids` prints the access key IDs the emulator

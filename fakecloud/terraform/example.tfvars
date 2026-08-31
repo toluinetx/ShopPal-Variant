@@ -11,3 +11,8 @@
 
 # Skip the decoy objects (leaked .env, DB dump, SSH key).
 # seed_bucket_objects = false
+
+# Skip the two RDS instances. fakecloud backs RDS with real Postgres
+# containers, so it needs Docker/Podman and reachable container registries;
+# set this false where that isn't available.
+# enable_rds = false
